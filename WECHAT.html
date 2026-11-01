@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>在微信里用它 · 记账机器人</title>
+<style>
+  :root{
+    --ink:#1f2328; --muted:#5f6b7a; --faint:#8b95a3;
+    --line:#e2e6eb; --bg:#f5f6f8; --card:#ffffff;
+    --blue:#185FA5; --blue-50:#E6F1FB; --blue-100:#B5D4F4;
+    --teal:#0F6E56; --teal-50:#E1F5EE;
+    --amber:#854F0B; --amber-50:#FAEEDA; --amber-line:#EF9F27;
+    --red:#A32D2D; --red-50:#FCEBEB;
+    --green:#3B6D11; --green-50:#EAF3DE;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    font-size:15px; line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:0 20px 80px}
+
+  /* 顶部 */
+  header{background:var(--card); border-bottom:1px solid var(--line); padding:28px 0 20px; margin-bottom:24px}
+  header .wrap{padding-bottom:0}
+  h1{font-size:24px; font-weight:600; margin:0 0 8px; letter-spacing:-.3px}
+  .sub{color:var(--muted); font-size:14px; margin:0}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+  .fact{background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:13px; color:var(--muted)}
+  .fact b{color:var(--ink); font-weight:600}
+
+  /* 进度 */
+  .progress-bar{position:sticky; top:0; z-index:20; background:rgba(255,255,255,.94); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:10px 0}
+  .progress-bar .wrap{display:flex; align-items:center; gap:14px; padding-bottom:0}
+  .track{flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden}
+  .track i{display:block; height:100%; width:0; background:var(--teal); border-radius:3px; transition:width .3s}
+  .progress-text{font-size:13px; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums}
+
+  /* 区块 */
+  section{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px 28px; margin-bottom:18px}
+  .step-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:6px}
+  .num{
+    flex:0 0 34px; height:34px; border-radius:10px; background:var(--blue-50); color:var(--blue);
+    display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px;
+  }
+  .step-head h2{font-size:19px; font-weight:600; margin:0; line-height:34px; letter-spacing:-.2px}
+  .dur{font-size:13px; color:var(--faint); font-weight:400; margin-left:8px}
+  .lede{color:var(--muted); font-size:14px; margin:0 0 18px}
+  h3{font-size:15px; font-weight:600; margin:24px 0 8px}
+  p{margin:10px 0}
+  ol,ul{margin:10px 0; padding-left:22px}
+  li{margin:7px 0}
+  li::marker{color:var(--faint)}
+  a{color:var(--blue)}
+  code{background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px;
+       font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  kbd{background:var(--card); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
+      padding:1px 6px; font-size:12.5px; font-family:inherit; color:var(--ink)}
+
+  /* 按钮/勾选 */
+  .done-btn{
+    margin-top:20px; display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    border:1px solid var(--line); background:var(--card); border-radius:9px; padding:7px 14px;
+    font-size:13.5px; color:var(--muted); font-family:inherit; transition:.15s;
+  }
+  .done-btn:hover{border-color:var(--blue-100); color:var(--blue)}
+  .done-btn .dot{width:15px; height:15px; border-radius:4px; border:1.5px solid var(--line); display:inline-block; position:relative}
+  .done-btn.on{background:var(--green-50); border-color:#C0DD97; color:var(--green)}
+  .done-btn.on .dot{background:var(--green); border-color:var(--green)}
+  .done-btn.on .dot::after{content:""; position:absolute; left:4px; top:1px; width:5px; height:9px;
+    border:2px solid #fff; border-top:0; border-left:0; transform:rotate(45deg)}
+
+  /* 提示块 */
+  .note{border-radius:10px; padding:13px 16px; margin:16px 0; font-size:14px; border:1px solid}
+  .note .t{font-weight:600; display:block; margin-bottom:3px}
+  .note.warn{background:var(--amber-50); border-color:#FAC775; color:#5a3707}
+  .note.tip{background:var(--blue-50); border-color:var(--blue-100); color:#0C447C}
+  .note.stop{background:var(--red-50); border-color:#F7C1C1; color:var(--red)}
+  .note.good{background:var(--green-50); border-color:#C0DD97; color:var(--green)}
+
+  /* 表格 */
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-weight:600; font-size:13px; color:var(--muted); background:var(--bg)}
+  tr:last-child td{border-bottom:0}
+  td code{font-size:12.5px}
+  .must{color:var(--red); font-weight:600; font-size:12px}
+
+  /* 线框图 */
+  .wire{border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:18px 0; background:var(--card)}
+  .wire-bar{display:flex; align-items:center; gap:6px; padding:9px 12px; background:var(--bg); border-bottom:1px solid var(--line)}
+  .wire-bar span{width:9px; height:9px; border-radius:50%; background:#d7dbe0}
+  .wire-bar em{margin-left:8px; font-style:normal; font-size:12.5px; color:var(--muted)}
+  .wire-body{padding:16px 18px; display:grid; gap:11px}
+  .wrow{display:grid; grid-template-columns:78px 1fr; gap:12px; align-items:center}
+  .wrow>label{font-size:13px; color:var(--muted)}
+  .winput{height:30px; border:1px dashed #c3cad2; border-radius:6px; background:#fafbfc;
+          display:flex; align-items:center; padding:0 9px; font-size:12.5px; color:var(--faint)}
+  .winput.filled{border-style:solid; background:var(--card); color:var(--ink)}
+  .wcheck{display:flex; align-items:center; gap:7px; font-size:13px; color:var(--ink)}
+  .wbox{width:14px; height:14px; border:1.5px solid var(--amber-line); border-radius:3px; background:var(--amber-50); position:relative}
+  .wbox::after{content:""; position:absolute; left:3px; top:0; width:5px; height:8px; border:2px solid var(--amber); border-top:0; border-left:0; transform:rotate(45deg)}
+
+  /* 便签 */
+  .grab{
+    background:var(--amber-50); border-left:3px solid var(--amber-line); border-radius:0 8px 8px 0;
+    padding:11px 14px; margin:14px 0; font-size:14px; color:#5a3707;
+  }
+  .grab b{color:#412402}
+  .grab .where{display:block; font-size:12.5px; color:#8a6520; margin-top:3px}
+
+  /* 表单 */
+  .form{display:grid; gap:12px; margin-top:8px}
+  .field{display:grid; grid-template-columns:150px 1fr; gap:14px; align-items:center}
+  .field label{font-size:13.5px; color:var(--muted)}
+  .field input{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:13.5px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--ink); background:var(--card);
+  }
+  .field input:focus{outline:none; border-color:var(--blue-100); box-shadow:0 0 0 3px rgba(24,95,165,.09)}
+  .field input.ok{border-color:#C0DD97; background:var(--green-50)}
+  .field input.bad{border-color:#F7C1C1; background:var(--red-50)}
+  .field .hint{grid-column:2; font-size:12px; color:var(--faint); margin-top:-6px}
+
+  .out{background:#1f2328; color:#e6edf3; border-radius:10px; padding:16px 18px; margin-top:18px;
+       font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px; line-height:1.9;
+       white-space:pre; overflow-x:auto}
+  .out .k{color:#7EC8FF}
+  .out .c{color:#7d8590}
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:0; border-radius:8px;
+    padding:9px 16px; font-size:13.5px; font-family:inherit; font-weight:500;
+    background:var(--blue); color:#fff; transition:.15s;
+  }
+  .btn:hover{background:#134a80}
+  .btn.ghost{background:var(--card); color:var(--ink); border:1px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--blue-100); color:var(--blue)}
+  .btn-row{display:flex; gap:10px; align-items:center; margin-top:16px; flex-wrap:wrap}
+  .copied{color:var(--teal); font-size:13px}
+
+  /* 目录 */
+  .toc{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; margin-top:4px}
+  .toc a{display:flex; gap:9px; align-items:baseline; padding:7px 11px; border-radius:8px; text-decoration:none;
+         color:var(--ink); font-size:13.5px; border:1px solid transparent}
+  .toc a:hover{background:var(--blue-50); border-color:var(--blue-100)}
+  .toc a i{font-style:normal; color:var(--faint); font-size:12px; font-variant-numeric:tabular-nums}
+
+  footer{color:var(--faint); font-size:13px; text-align:center; margin-top:32px}
+  @media (max-width:640px){
+    .wrap{padding:0 14px 60px}
+    section{padding:20px 18px; border-radius:12px}
+    .field{grid-template-columns:1fr; gap:6px}
+    .field .hint{grid-column:1}
+    .wrow{grid-template-columns:1fr; gap:6px}
+  }
+
+  .kicker{font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin:0 0 10px}
+  .dim{color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">记账机器人 · 通道迁移</div>
+  <h1>在微信里用它</h1>
+  <p class="lede">现在这套程序跑在<b>企业微信</b>里。想换成微信不一定要重做——有三条路，成本差得很远。先看表，再看步骤。</p>
+</header>
+
+<section id="choose">
+  <div class="step-head"><h2>一、三条路，先选一条</h2></div>
+
+  <table>
+    <thead>
+      <tr><th style="width:26%">路径</th><th style="width:24%">要做什么</th><th style="width:18%">多久</th><th>代价</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>① 微信插件</b><br><span class="dim">企业微信自带</span></td>
+        <td>后台点两下，个人微信扫码关注</td>
+        <td>5 分钟</td>
+        <td>零。但<b>能不能对话要看运气</b>——多数应用在微信里只能收通知</td>
+      </tr>
+      <tr>
+        <td><b>② 微信测试号</b><br><span class="dim">推荐</span></td>
+        <td>扫码即得，配一个 URL</td>
+        <td>30 分钟</td>
+        <td>只能自己用（最多 100 个白名单）；长期不登录可能被回收</td>
+      </tr>
+      <tr>
+        <td><b>③ 个人订阅号</b><br><span class="dim">最正式</span></td>
+        <td>注册 + 审核 + 可能还要域名备案</td>
+        <td>7～20 天</td>
+        <td>要备案域名（约 50 元/年 + 两周）；个人主体没有主动推送</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note tip">
+    <span class="t">先说结论</span>
+    先花 5 分钟试 ①，不行立刻上 ②。②在微信里的体验和正式公众号完全一样，而且免费、免审核、不查备案。
+    只有当你打算长期稳定地给别人用时，③ 才值得。
+  </div>
+
+  <div class="note">
+    <span class="t">不管你选哪条，企业微信那边都不用拆</span>
+    代码现在支持<b>两套凭证同时存在</b>，靠签名自动识别消息从哪来。你可以一边用着企业微信，一边把微信通道接上，互不干扰。
+  </div>
+</section>
+
+<section id="diff">
+  <div class="step-head"><h2>二、换通道到底要改什么</h2></div>
+
+  <p>企业微信和公众号是两套接口，但核心算法一模一样（都是 WXBizMsgCrypt 那一套 AES-256-CBC）。真正的差别只有三处：</p>
+
+  <table>
+    <thead><tr><th style="width:22%">对比项</th><th style="width:34%">企业微信</th><th>公众号</th></tr></thead>
+    <tbody>
+      <tr><td>验签参数</td><td><code>msg_signature</code></td><td>安全模式 <code>msg_signature</code>；明文模式 <code>signature</code></td></tr>
+      <tr><td>receiveid</td><td>CorpID（<code>ww</code> 开头）</td><td>AppID（<code>wx</code> 开头）</td></tr>
+      <tr><td>是否加密</td><td>必须加密</td><td>可选：明文 / 兼容 / 安全</td></tr>
+      <tr><td>消息 XML</td><td colspan="2">完全一样（<code>ToUserName</code> / <code>FromUserName</code> / <code>Content</code>）</td></tr>
+      <tr><td>5 秒回包限制</td><td colspan="2">一样</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note good">
+    <span class="t">这部分我已经改完了</span>
+    代码现在会<b>自动判断</b>一条请求属于哪个通道、是加密还是明文，然后按对应方式回包。
+    你要做的只是把公众号的 3 个凭证填进配置，一行代码都不用碰。
+  </div>
+</section>
+
+<section id="s1">
+  <div class="step-head"><h2>三、路径 ①：微信插件（5 分钟，先试这个）</h2></div>
+
+  <p>企业微信自带一个功能叫「微信插件」——本质就是原来的微信企业号。关注之后，你的企业应用会出现在个人微信里。</p>
+
+  <h3>步骤</h3>
+  <ol>
+    <li>企业微信管理后台 → <b>我的企业</b> → <b>微信插件</b>。</li>
+    <li>页面上有个「邀请关注微信插件」的二维码，<b>用个人微信扫</b>，点关注。</li>
+    <li>回到这个页面，确认两处：
+      <ul>
+        <li><b>取消勾选</b>「成员使用微信插件时需要使用企业微信客户端」——勾着的话，点任何应用都会强制跳企业微信。</li>
+        <li>确认「消息同步」是开着的。</li>
+      </ul>
+    </li>
+    <li>手机企业微信 → 左上角「≡」→ 设置 → 新消息通知 → <b>取消勾选</b>「仅在企业微信中接收消息」。</li>
+    <li>打开个人微信，在公众号列表或「通讯录 → 我的企业」里找到它，点进去 → 底部「<b>工作台</b>」→ 找你的「记账」应用。</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="t">怎么判断这条路能不能用</span>
+    点进「记账」后，如果看到的是一个<b>能打字的对话框</b>，那就能用——直接发「25 午饭」，什么都不用改。<br>
+    如果看到的是网页、或者只显示历史通知、或者提示"请在企业微信中打开"，就说明<b>这条路走不通</b>，别耗时间，直接去第四节。
+  </div>
+
+  <div class="note">
+    <span class="t">为什么它可能不能用</span>
+    微信插件主要是为「接收通知」和「打开 H5 应用」设计的。能不能跟自建应用<b>对话</b>，取决于应用类型和企业微信版本，
+    而且这个能力这几年在收紧。所以：5 分钟试一次，成了省一小时，不成也不亏。
+  </div>
+</section>
+
+<section id="s2">
+  <div class="step-head"><h2>四、路径 ②：微信测试号（推荐）</h2></div>
+
+  <p>微信官方给开发者留的后门：<b>扫码就有完整的公众号能力</b>，不用注册、不用审核、不查域名备案。在微信里的样子就是个普通公众号。</p>
+
+  <div class="note tip">
+    <span class="t">测试号的两个关键特性，正好适合你</span>
+    ① <b>不校验域名备案</b>——腾讯云函数那个默认域名可以直接填；<br>
+    ② 它的接口配置<b>只有 URL 和 Token，没有 AESKey 选项</b>，也就是天然走<b>明文模式</b>，配置最简单。
+  </div>
+
+  <h3>2.1 拿测试号（2 分钟）</h3>
+  <ol>
+    <li>电脑上打开：<code>https://mp.weixin.qq.com/debug/cgi-bin/sandbox?t=sandbox/login</code></li>
+    <li>手机微信扫码登录。</li>
+    <li>页面上直接给你 <b>appID</b> 和 <b>appsecret</b>，另外还有一个「测试号二维码」——<b>这个二维码待会儿要扫</b>，先别关页面。</li>
+  </ol>
+
+  <h3>2.2 先配凭证，再填 URL（顺序不能反）</h3>
+  <p>测试号页面上「接口配置信息」点提交时，微信会<b>立刻</b>来验证你的服务器。所以必须先把凭证配好、函数能正确回应，再去填 URL。</p>
+
+  <ol>
+    <li>腾讯云 → 云函数 → 你的函数 → <b>函数配置</b> → 编辑 → 环境变量，<b>新增两个</b>：
+      <div class="out" style="margin:8px 0 4px">WECHAT_APP_ID = wx 开头的那串
+WECHAT_TOKEN  = 你自己定，比如 jizhang2026</div>
+      <div class="dim" style="font-size:12.5px">只需要这两个。明文模式不需要 WECHAT_AES_KEY，留空即可。</div>
+    </li>
+    <li>保存。环境变量改动后函数会自动重启，不用重新上传代码包。</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="t">Token 要一致</span>
+    这里填的 <code>WECHAT_TOKEN</code> 必须和待会儿在测试号页面填的 Token <b>一字不差</b>，包括大小写。
+    不一致的表现是：保存 URL 时报「配置失败」，函数日志里写着 <code>签名校验失败</code>。
+  </div>
+
+  <h3>2.3 填 URL 并保存</h3>
+  <ol>
+    <li>回到测试号页面，找到「<b>接口配置信息</b>」→ 点「修改」。</li>
+    <li><b>URL</b>：填你的云函数地址，就是之前企业微信回调用的那个，形如
+      <div class="out" style="margin:8px 0 4px">https://xxxxx-xxxxx.ap-guangzhou.tencentscf.com</div>
+    </li>
+    <li><b>Token</b>：填刚才那个 <code>jizhang2026</code>（或你自定的值）。</li>
+    <li>点「提交」。微信立刻发一个 GET 请求来验证 —— 通过了会提示「配置成功」。</li>
+  </ol>
+
+  <div class="note stop">
+    <span class="t">提交后没反应 / 提示失败，按这个顺序查</span>
+    ① 函数日志里<b>有没有</b>那条 GET 请求？没有 → URL 填错，或函数 URL 的公网访问没开；<br>
+    ② 有请求但返回 401 <code>签名校验失败</code> → Token 两边不一致；<br>
+    ③ 返回 200 但页面还提示失败 → 检查返回值是不是<b>纯文本 echostr</b>，不能带标签或多余空格。<br>
+    本地可以先跑 <code>ping.cmd 你的URL</code>，第 2 步就是专门测这个的。
+  </div>
+
+  <h3>2.4 扫码关注，开始记账</h3>
+  <ol>
+    <li>在测试号页面找到「<b>测试号二维码</b>」，手机微信扫一下并关注。</li>
+    <li>打开微信，进这个公众号的对话框，发：<code>25 午饭</code></li>
+    <li>收到「✅ 支出 ¥25.00 · 午饭（餐饮）」就说明通了。</li>
+  </ol>
+
+  <div class="note">
+    <span class="t">测试号的三个使用须知</span>
+    ① <b>只有扫过二维码的微信能用</b>——你自己扫了就行，最多能加 100 个；<br>
+    ② 长期不登录测试号管理页，可能会被回收，<b>偶尔去登录一次</b>保活；<br>
+    ③ 它支持的接口比个人订阅号还多（有客服接口，将来想做每日推送也能做）。
+  </div>
+</section>
+
+<section id="s3">
+  <div class="step-head"><h2>五、路径 ③：个人订阅号（要长期给别人用时）</h2></div>
+
+  <p>如果你想让家人朋友也能用，就得走正式公众号。这里有一个必须先说的<b>硬门槛</b>。</p>
+
+  <div class="note stop">
+    <span class="t">域名这一关绕不过去</span>
+    公众号的服务器配置要求 URL 是 <b>80 / 443 端口 + 域名</b>，而且实践中<b>未备案域名基本会被拦</b>。
+    腾讯云函数那个默认域名能不能过，取决于微信当时的校验策略——<b>可能能存进去，也可能被拒，而且有被限流的风险</b>。<br><br>
+    备案要 7～20 天、域名约 50 元/年。所以除非你确实要长期对外，否则<b>别走这条</b>。
+  </div>
+
+  <h3>流程</h3>
+  <ol>
+    <li><b>注册</b>：<code>mp.weixin.qq.com</code> → 立即注册 → 订阅号 → 主体类型选「个人」（身份证 + 人脸识别）。</li>
+    <li>等审核，一般 1～7 天。</li>
+    <li>「设置与开发」→「基本配置」→ 记下 <b>AppID</b>。</li>
+    <li>「服务器配置」→ 修改配置：
+      <table style="margin-top:8px">
+        <tbody>
+          <tr><td style="width:34%">URL</td><td>云函数地址，或你自己的备案域名</td></tr>
+          <tr><td>Token</td><td>自己定，3～32 位</td></tr>
+          <tr><td>EncodingAESKey</td><td>点「随机生成」，43 位</td></tr>
+          <tr><td>消息加解密方式</td><td><b>安全模式</b>（推荐）；调试期可以先用「明文模式」</td></tr>
+        </tbody>
+      </table>
+    </li>
+    <li>提交后，把 <code>WECHAT_APP_ID</code> / <code>WECHAT_TOKEN</code> / <code>WECHAT_AES_KEY</code> 三个都填进函数环境变量。</li>
+    <li>回到「服务器配置」页面，<b>点「启用」</b>。</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="t">保存成功 ≠ 已经启用</span>
+    公众号的服务器配置保存之后，页面顶部还有一个「<b>启用</b>」按钮。<b>不点它，消息一条都不会推过来</b>，
+    但配置页面看起来一切正常。这是公众号开发里最高频的"配了半天没反应"。<br><br>
+    企业微信没有这个按钮，所以从那边迁过来的人几乎都会踩一次。
+  </div>
+
+  <h3>个人订阅号做不到的事</h3>
+  <ul>
+    <li><b>没有客服接口</b>，不能主动给你推送（每日汇总、账单提醒这类做不了）——测试号反而可以；</li>
+    <li>自定义菜单、网页授权等能力需要微信认证（个人主体无法认证）；</li>
+    <li>每天只能群发 1 次。</li>
+  </ul>
+  <p>但<b>被动回复完全够用</b>：你发一句，它回一句，正是记账要的形态。</p>
+</section>
+
+<section id="cfg">
+  <div class="step-head"><h2>六、配置（三条路共用的部分）</h2></div>
+
+  <p>不管你走哪条路，凭证都是填进同一个地方。命令一条搞定：</p>
+
+  <div class="out">.\setenv.cmd --channel=wechat</div>
+
+  <p style="margin-top:10px">它会只问公众号的 3 项 + 飞书的 4 项，逐个粘进去即可。也可以手动改 <code>.env</code>：</p>
+
+  <div class="out"># 公众号 / 测试号
+WECHAT_APP_ID=wx1234567890abcdef
+WECHAT_TOKEN=jizhang2026
+# 明文模式留空；安全模式填 43 位
+WECHAT_AES_KEY=
+WECHAT_MODE=auto</div>
+
+  <table style="margin-top:14px">
+    <thead><tr><th style="width:30%">变量</th><th>什么时候要填</th></tr></thead>
+    <tbody>
+      <tr><td><code>WECHAT_APP_ID</code></td><td>必填。测试号管理页顶部的 appID；公众号「基本配置」里的 AppID</td></tr>
+      <tr><td><code>WECHAT_TOKEN</code></td><td>必填。和后台填的 Token 一字不差</td></tr>
+      <tr><td><code>WECHAT_AES_KEY</code></td><td>测试号 / 明文模式：<b>留空</b>。公众号安全模式：填 43 位</td></tr>
+      <tr><td><code>WECHAT_MODE</code></td><td>一般写 <code>auto</code>，程序自己判断</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <span class="t">云函数上也要填一遍</span>
+    <code>.env</code> 只在你本机生效，云函数没有这个文件。上面这几个变量要在
+    <b>云函数 → 函数配置 → 环境变量</b>里再填一次，两边保持一致。<br>
+    企业微信那几个变量<b>不用删</b>，留着就能同时用。
+  </div>
+
+  <div class="note tip">
+    <span class="t">填完先自查格式</span>
+    <div class="out" style="margin:6px 0">.\setenv.cmd --show</div>
+    它会打印当前配置，并在最下面告诉你<b>现在实际启用了哪几套通道</b>（企业微信 / 公众号安全模式 / 公众号明文模式）。
+  </div>
+</section>
+
+<section id="test">
+  <div class="step-head"><h2>七、不碰微信就能测的本地验证</h2></div>
+
+  <p>填完凭证后，别急着去微信里试错。本地跑一遍，链路通不通当场就知道：</p>
+
+  <div class="out">node src/local-server.js
+<span class="c"># 另开一个窗口：</span>
+node tools/sim.js --wechat "25 午饭"          <span class="c"># 公众号安全模式</span>
+node tools/sim.js --wechat --plain "8 地铁"   <span class="c"># 公众号明文模式</span>
+node tools/sim.js "12 早餐"                   <span class="c"># 企业微信（原来的）</span></div>
+
+  <p style="margin-top:10px">模拟器做的事和微信服务器一模一样：加密 → POST → 校验签名 → 解密回复。跑通了再上线。</p>
+
+  <div class="note good">
+    <span class="t">实测输出（公众号明文模式）</span>
+    <div class="out" style="margin:6px 0 0;background:var(--green-50);color:var(--ink);border-color:#bfe0cc">→ 通道: 公众号 · 明文模式
+→ 发送: 8 地铁
+  HTTP 200
+
+← 机器人回复:
+  ✅ 支出 ¥8.00 · 地铁（交通）
+  今日 ¥51.00 ｜ 本月 ¥51.00</div>
+  </div>
+
+  <p>上线之后想远程验证函数 URL 通不通，还是用那个探测工具。<b>只配了公众号的话要加 </b><code>--wechat</code>，否则它会按企业微信凭证去试：</p>
+  <div class="out">.\ping.cmd https://你的函数URL --wechat</div>
+</section>
+
+<section id="err">
+  <div class="step-head"><h2>八、排错速查</h2></div>
+
+  <table>
+    <thead><tr><th style="width:34%">现象</th><th>原因和修法</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>测试号提交 URL 提示「配置失败」</td>
+        <td>① Token 两边不一致（最常见）；② 函数 URL 的公网访问没开；③ 返回的不是纯文本 echostr。先跑 <code>ping.cmd</code> 的第 2 步。</td>
+      </tr>
+      <tr>
+        <td>公众号保存成功，但微信里发消息没反应</td>
+        <td><b>没点「启用」</b>。服务器配置页面顶部有启用按钮，不点不推送。企业微信没有这一步，从那边迁过来必踩。</td>
+      </tr>
+      <tr>
+        <td>提示「该公众号暂时无法提供服务」</td>
+        <td>函数 5 秒内没回包。把 <code>APP_SHOW_TODAY_TOTAL=0</code>（少查一次飞书）；顺便确认云函数超时时间不是默认的 3 秒。</td>
+      </tr>
+      <tr>
+        <td>回复内容对，但微信里显示乱码</td>
+        <td>回包 <code>Content-Type</code> 要是 <code>application/xml; charset=utf-8</code>。代码里已经写死，出现乱码多半是网关改写。</td>
+      </tr>
+      <tr>
+        <td>测试号发消息，日志里有 <code>receiveid 不匹配</code></td>
+        <td><code>WECHAT_APP_ID</code> 抄错了，或者是别的公众号的 AppID。测试号的 appID 在管理页顶部。</td>
+      </tr>
+      <tr>
+        <td>公众号提示「redirect_uri 域名与后台配置不一致」</td>
+        <td>这条和记账无关——是本项目以外的网页授权问题。记账只用消息推送，不需要配网页授权域名。</td>
+      </tr>
+      <tr>
+        <td>企业微信那边突然不能用了</td>
+        <td>不会。两套凭证并存，各自独立。除非你把 <code>WECOM_*</code> 删了或者 Token 改错。</td>
+      </tr>
+      <tr>
+        <td>测试号隔了几个月不能用</td>
+        <td>长期不登录被回收了。重新扫码申请一个，换 <code>WECHAT_APP_ID</code> 和 <code>WECHAT_TOKEN</code> 即可。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note tip" style="margin-top:18px">
+    <span class="t">一句话选路</span>
+    <b>只想自己在微信里用</b> → 测试号（第四节），30 分钟，免费，不查备案。<br>
+    <b>想让家人也用</b> → 先各自扫码加测试号白名单（能用）；不够再上正式订阅号 + 备案域名。<br>
+    <b>不想折腾任何注册</b> → 先试微信插件（第三节），5 分钟见分晓。
+  </div>
+</section>
+
+</div>
+</body>
+</html>

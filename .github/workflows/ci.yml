@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Syntax check
+        run: |
+          for f in $(find . -name '*.js' -not -path './node_modules/*'); do
+            node --check "$f" || exit 1
+          done
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build deployment package
+        run: node tools/pack.js
+
+      - name: Fail if the package accidentally contains credentials
+        run: |
+          if unzip -l dist/suiyin.zip | grep -qE '(^|/)\.env'; then
+            echo "::error::.env was packed into the deployment zip"
+            exit 1
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Reject committed credentials
+        run: |
+          set -e
+          if [ -f .env ]; then
+            echo "::error::.env is committed"
+            exit 1
+          fi
+          # Long hex / base64 blobs and private keys are the usual leak shapes
+          if grep -rInE "BEGIN [A-Z ]*PRIVATE KEY|bascn[A-Za-z0-9]{16,}|ww[0-9a-f]{16}|sk-[A-Za-z0-9]{20,}" \
+              --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
+              --exclude=.env.example . ; then
+            echo "::error::possible credential in tracked files"
+            exit 1
+          fi
+          echo "no credentials found"

@@ -1,0 +1,37 @@
+{
+  "name": "suiyin",
+  "version": "1.3.0",
+  "description": "Bookkeeping over WeChat / WeCom messages, stored in a Feishu Bitable. Zero dependencies.",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "node src/local-server.js",
+    "test": "node test/run.js",
+    "check": "node tools/check.js",
+    "pack": "node tools/pack.js"
+  },
+  "keywords": [
+    "wechat",
+    "wecom",
+    "weixin",
+    "bookkeeping",
+    "expense-tracker",
+    "feishu",
+    "lark",
+    "bitable",
+    "serverless",
+    "tencent-scf"
+  ],
+  "author": "Karasus404",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Karasus404/suiyin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Karasus404/suiyin/issues"
+  },
+  "homepage": "https://github.com/Karasus404/suiyin#readme"
+}

@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>碎银 Suiyin · 部署操作指南</title>
+<style>
+  :root{
+    --ink:#1f2328; --muted:#5f6b7a; --faint:#8b95a3;
+    --line:#e2e6eb; --bg:#f5f6f8; --card:#ffffff;
+    --blue:#185FA5; --blue-50:#E6F1FB; --blue-100:#B5D4F4;
+    --teal:#0F6E56; --teal-50:#E1F5EE;
+    --amber:#854F0B; --amber-50:#FAEEDA; --amber-line:#EF9F27;
+    --red:#A32D2D; --red-50:#FCEBEB;
+    --green:#3B6D11; --green-50:#EAF3DE;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    font-size:15px; line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:0 20px 80px}
+
+  /* 顶部 */
+  header{background:var(--card); border-bottom:1px solid var(--line); padding:28px 0 20px; margin-bottom:24px}
+  header .wrap{padding-bottom:0}
+  h1{font-size:24px; font-weight:600; margin:0 0 8px; letter-spacing:-.3px}
+  .sub{color:var(--muted); font-size:14px; margin:0}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+  .fact{background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:13px; color:var(--muted)}
+  .fact b{color:var(--ink); font-weight:600}
+
+  /* 进度 */
+  .progress-bar{position:sticky; top:0; z-index:20; background:rgba(255,255,255,.94); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:10px 0}
+  .progress-bar .wrap{display:flex; align-items:center; gap:14px; padding-bottom:0}
+  .track{flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden}
+  .track i{display:block; height:100%; width:0; background:var(--teal); border-radius:3px; transition:width .3s}
+  .progress-text{font-size:13px; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums}
+
+  /* 区块 */
+  section{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px 28px; margin-bottom:18px}
+  .step-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:6px}
+  .num{
+    flex:0 0 34px; height:34px; border-radius:10px; background:var(--blue-50); color:var(--blue);
+    display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px;
+  }
+  .step-head h2{font-size:19px; font-weight:600; margin:0; line-height:34px; letter-spacing:-.2px}
+  .dur{font-size:13px; color:var(--faint); font-weight:400; margin-left:8px}
+  .lede{color:var(--muted); font-size:14px; margin:0 0 18px}
+  h3{font-size:15px; font-weight:600; margin:24px 0 8px}
+  p{margin:10px 0}
+  ol,ul{margin:10px 0; padding-left:22px}
+  li{margin:7px 0}
+  li::marker{color:var(--faint)}
+  a{color:var(--blue)}
+  code{background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px;
+       font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  kbd{background:var(--card); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
+      padding:1px 6px; font-size:12.5px; font-family:inherit; color:var(--ink)}
+
+  /* 按钮/勾选 */
+  .done-btn{
+    margin-top:20px; display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    border:1px solid var(--line); background:var(--card); border-radius:9px; padding:7px 14px;
+    font-size:13.5px; color:var(--muted); font-family:inherit; transition:.15s;
+  }
+  .done-btn:hover{border-color:var(--blue-100); color:var(--blue)}
+  .done-btn .dot{width:15px; height:15px; border-radius:4px; border:1.5px solid var(--line); display:inline-block; position:relative}
+  .done-btn.on{background:var(--green-50); border-color:#C0DD97; color:var(--green)}
+  .done-btn.on .dot{background:var(--green); border-color:var(--green)}
+  .done-btn.on .dot::after{content:""; position:absolute; left:4px; top:1px; width:5px; height:9px;
+    border:2px solid #fff; border-top:0; border-left:0; transform:rotate(45deg)}
+
+  /* 提示块 */
+  .note{border-radius:10px; padding:13px 16px; margin:16px 0; font-size:14px; border:1px solid}
+  .note .t{font-weight:600; display:block; margin-bottom:3px}
+  .note.warn{background:var(--amber-50); border-color:#FAC775; color:#5a3707}
+  .note.tip{background:var(--blue-50); border-color:var(--blue-100); color:#0C447C}
+  .note.stop{background:var(--red-50); border-color:#F7C1C1; color:var(--red)}
+  .note.good{background:var(--green-50); border-color:#C0DD97; color:var(--green)}
+
+  /* 表格 */
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-weight:600; font-size:13px; color:var(--muted); background:var(--bg)}
+  tr:last-child td{border-bottom:0}
+  td code{font-size:12.5px}
+  .must{color:var(--red); font-weight:600; font-size:12px}
+
+  /* 线框图 */
+  .wire{border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:18px 0; background:var(--card)}
+  .wire-bar{display:flex; align-items:center; gap:6px; padding:9px 12px; background:var(--bg); border-bottom:1px solid var(--line)}
+  .wire-bar span{width:9px; height:9px; border-radius:50%; background:#d7dbe0}
+  .wire-bar em{margin-left:8px; font-style:normal; font-size:12.5px; color:var(--muted)}
+  .wire-body{padding:16px 18px; display:grid; gap:11px}
+  .wrow{display:grid; grid-template-columns:78px 1fr; gap:12px; align-items:center}
+  .wrow>label{font-size:13px; color:var(--muted)}
+  .winput{height:30px; border:1px dashed #c3cad2; border-radius:6px; background:#fafbfc;
+          display:flex; align-items:center; padding:0 9px; font-size:12.5px; color:var(--faint)}
+  .winput.filled{border-style:solid; background:var(--card); color:var(--ink)}
+  .wcheck{display:flex; align-items:center; gap:7px; font-size:13px; color:var(--ink)}
+  .wbox{width:14px; height:14px; border:1.5px solid var(--amber-line); border-radius:3px; background:var(--amber-50); position:relative}
+  .wbox::after{content:""; position:absolute; left:3px; top:0; width:5px; height:8px; border:2px solid var(--amber); border-top:0; border-left:0; transform:rotate(45deg)}
+
+  /* 便签 */
+  .grab{
+    background:var(--amber-50); border-left:3px solid var(--amber-line); border-radius:0 8px 8px 0;
+    padding:11px 14px; margin:14px 0; font-size:14px; color:#5a3707;
+  }
+  .grab b{color:#412402}
+  .grab .where{display:block; font-size:12.5px; color:#8a6520; margin-top:3px}
+
+  /* 表单 */
+  .form{display:grid; gap:12px; margin-top:8px}
+  .field{display:grid; grid-template-columns:150px 1fr; gap:14px; align-items:center}
+  .field label{font-size:13.5px; color:var(--muted)}
+  .field input{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:13.5px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--ink); background:var(--card);
+  }
+  .field input:focus{outline:none; border-color:var(--blue-100); box-shadow:0 0 0 3px rgba(24,95,165,.09)}
+  .field input.ok{border-color:#C0DD97; background:var(--green-50)}
+  .field input.bad{border-color:#F7C1C1; background:var(--red-50)}
+  .field .hint{grid-column:2; font-size:12px; color:var(--faint); margin-top:-6px}
+
+  .out{background:#1f2328; color:#e6edf3; border-radius:10px; padding:16px 18px; margin-top:18px;
+       font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px; line-height:1.9;
+       white-space:pre; overflow-x:auto}
+  .out .k{color:#7EC8FF}
+  .out .c{color:#7d8590}
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:0; border-radius:8px;
+    padding:9px 16px; font-size:13.5px; font-family:inherit; font-weight:500;
+    background:var(--blue); color:#fff; transition:.15s;
+  }
+  .btn:hover{background:#134a80}
+  .btn.ghost{background:var(--card); color:var(--ink); border:1px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--blue-100); color:var(--blue)}
+  .btn-row{display:flex; gap:10px; align-items:center; margin-top:16px; flex-wrap:wrap}
+  .copied{color:var(--teal); font-size:13px}
+
+  /* 目录 */
+  .toc{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; margin-top:4px}
+  .toc a{display:flex; gap:9px; align-items:baseline; padding:7px 11px; border-radius:8px; text-decoration:none;
+         color:var(--ink); font-size:13.5px; border:1px solid transparent}
+  .toc a:hover{background:var(--blue-50); border-color:var(--blue-100)}
+  .toc a i{font-style:normal; color:var(--faint); font-size:12px; font-variant-numeric:tabular-nums}
+
+  footer{color:var(--faint); font-size:13px; text-align:center; margin-top:32px}
+  @media (max-width:640px){
+    .wrap{padding:0 14px 60px}
+    section{padding:20px 18px; border-radius:12px}
+    .field{grid-template-columns:1fr; gap:6px}
+    .field .hint{grid-column:1}
+    .wrow{grid-template-columns:1fr; gap:6px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>碎银 Suiyin · 部署操作指南</h1>
+    <p class="sub">从零到「发一句 <code>25 午饭</code> 就记上账」，全程照着点。</p>
+    <div class="facts">
+      <span class="fact">预计 <b>35–45 分钟</b></span>
+      <span class="fact">花费 <b>0 元</b></span>
+      <span class="fact">不需要 <b>服务器 / 域名 / 备案</b></span>
+      <span class="fact">需要 <b>3 个免费账号</b></span>
+    </div>
+
+    <div class="note tip" style="margin-top:16px">
+      <span class="t">想直接在微信里用，而不是企业微信？</span>
+      这份手册走的是<b>企业微信</b>通道。如果你更想在微信里发消息，看
+      <a href="WECHAT.html" style="color:var(--blue);font-weight:600">WECHAT.html</a>
+      —— 三条路（微信插件 / 微信测试号 / 个人订阅号）的成本和限制都写在那份里。<br>
+      代码两边都支持，两套凭证可以并存，不用二选一。
+    </div>
+  </div>
+</header>
+
+<div class="progress-bar">
+  <div class="wrap">
+    <div class="track"><i id="bar"></i></div>
+    <div class="progress-text"><span id="doneCount">0</span> / 9 步完成</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<section>
+  <div class="step-head"><div class="num" style="background:var(--bg);color:var(--muted)">目</div><h2 style="font-size:16px">这一步要花在哪</h2></div>
+  <nav class="toc">
+    <a href="#s1"><i>01</i> 建飞书表格</a>
+    <a href="#s2"><i>02</i> 抄表格的两个 ID</a>
+    <a href="#s3"><i>03</i> 建飞书应用</a>
+    <a href="#s4"><i>04</i> 把应用加进表格</a>
+    <a href="#s5"><i>05</i> 注册企业微信</a>
+    <a href="#s6"><i>06</i> 填 7 个值</a>
+    <a href="#s7"><i>07</i> 本地自检</a>
+    <a href="#s8"><i>08</i> 部署云函数</a>
+    <a href="#s9"><i>09</i> 填回调 URL</a>
+  </nav>
+  <div class="note tip" style="margin-bottom:0">
+    <span class="t">开始之前</span>
+    一台电脑 + 一部手机（手机用来最后在微信里测）。三个后台的界面改版比较频繁，如果按钮文字和我写的不完全一样，按括号里的关键词找就能找到。
+  </div>
+</section>
+
+<!-- ========== 1 ========== -->
+<section id="s1">
+  <div class="step-head"><div class="num">1</div><h2>建飞书表格 <span class="dur">约 8 分钟</span></h2></div>
+  <p class="lede">账目最终存在这里。手机上随时翻，也能自己做透视表和图表。</p>
+
+  <ol>
+    <li>打开 <a href="https://www.feishu.cn" target="_blank" rel="noopener">feishu.cn</a>，注册或登录（没有账号用手机号注册，免费）。</li>
+    <li>首页右上角「新建」→ 选「多维表格」→ 空白表格 → 命名 <code>我的账本</code>。</li>
+    <li>默认表格自带「文本」「单选」等列，<b>全部删掉</b>：点列标题 → 菜单里选「删除字段」。</li>
+    <li>按下面这张表建 5 列。建列：点表格最右侧的 <kbd>+</kbd> 或最后一列标题上的 <kbd>+</kbd>。</li>
+  </ol>
+
+  <table>
+    <thead><tr><th style="width:88px">列名</th><th style="width:96px">字段类型</th><th>要点</th></tr></thead>
+    <tbody>
+      <tr><td><code>金额</code></td><td>数字</td><td>小数位数设成 2</td></tr>
+      <tr><td><code>类型</code></td><td>单选</td><td>建好后进「编辑字段」，先加两个选项：<code>支出</code>、<code>收入</code>，一个字都不能差</td></tr>
+      <tr><td><code>备注</code></td><td>多行文本</td><td>保持默认即可</td></tr>
+      <tr><td><code>分类</code></td><td>多行文本</td><td>建议就用文本。用单选的话要把 10 个分类全建好，漏一个就写入失败</td></tr>
+      <tr><td><code>日期</code></td><td>日期</td><td><span class="must">必须是日期类型</span>。编辑字段里勾上「显示时间」，格式选 <code>yyyy/MM/dd HH:mm</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>建好之后应该长这样</h3>
+  <div class="wire">
+    <div class="wire-bar"><span></span><span></span><span></span><em>我的账本 · 多维表格</em></div>
+    <div class="wire-body" style="gap:0">
+      <table style="margin:0; font-size:13px">
+        <thead><tr><th>金额</th><th>类型</th><th>备注</th><th>分类</th><th>日期</th></tr></thead>
+        <tbody><tr><td style="color:var(--faint)">25</td><td style="color:var(--faint)">支出</td><td style="color:var(--faint)">午饭</td><td style="color:var(--faint)">餐饮</td><td style="color:var(--faint)">2026/11/01 12:30</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note stop">
+    <span class="t">这三个错误会让后面卡住，现在避开</span>
+    ① 列名多一个空格（<code>金额 </code>）—— 后面自检会明确告诉你找不到列<br>
+    ② 日期列建成「文本」—— 查询筛选会失效<br>
+    ③ 「类型」建了单选却没加「支出 / 收入」两个选项 —— 写入直接报错
+  </div>
+
+  <div class="note tip">
+    <span class="t">列名不想用中文？</span>
+    可以，但要在配置里告诉程序。比如你想叫 <code>amount</code>，就加一行 <code>FEISHU_FIELD_AMOUNT=amount</code>。先按中文建最简单。
+  </div>
+
+  <button class="done-btn" data-step="s1"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 2 ========== -->
+<section id="s2">
+  <div class="step-head"><div class="num">2</div><h2>抄表格的两个 ID <span class="dur">约 2 分钟</span></h2></div>
+  <p class="lede">不用进任何后台，看浏览器地址栏就够了。</p>
+
+  <p>表格打开后，地址栏长这样（把中间两段抄下来）：</p>
+
+  <div class="wire">
+    <div class="wire-bar"><span></span><span></span><span></span><em>地址栏</em></div>
+    <div class="wire-body" style="font-family:ui-monospace,Consolas,monospace; font-size:12.5px; line-height:2.1">
+      <div>https://abc123.feishu.cn/base/<b style="background:var(--amber-50); padding:1px 4px; border-radius:3px">bascnCMIxxxxxxx</b>?table=<b style="background:var(--blue-50); padding:1px 4px; border-radius:3px">tblAbCdEf123</b>&amp;view=vewXyZ</div>
+    </div>
+  </div>
+
+  <div class="grab">
+    <b>第 3 个值：</b> <code>FEISHU_APP_TOKEN</code>
+    <span class="where">= <code>/base/</code> 后面、<code>?</code> 前面的那一串</span>
+  </div>
+  <div class="grab">
+    <b>第 4 个值：</b> <code>FEISHU_TABLE_ID</code>
+    <span class="where">= <code>table=</code> 后面、<code>&amp;</code> 前面的那一串，一般以 tbl 开头</span>
+  </div>
+
+  <div class="note warn">
+    <span class="t">如果地址里是 <code>/wiki/</code> 而不是 <code>/base/</code></span>
+    说明这张表建在知识库里，接口读不到。新建一个普通多维表格（不走知识库），或者把表移到「我的空间」下再打开。
+  </div>
+
+  <button class="done-btn" data-step="s2"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 3 ========== -->
+<section id="s3">
+  <div class="step-head"><div class="num">3</div><h2>建飞书应用，拿 App ID 和 Secret <span class="dur">约 8 分钟</span></h2></div>
+  <p class="lede">这一步是让程序有「写你表格」的身份。</p>
+
+  <ol>
+    <li>打开 <a href="https://open.feishu.cn" target="_blank" rel="noopener">open.feishu.cn</a>，用同一个飞书账号登录，进入「开发者后台」。</li>
+    <li>点「创建企业自建应用」。名称填 <code>记账机器人</code>，描述随意 → 创建。</li>
+    <li>左侧「凭证与基础信息」：抄下 <b>App ID</b>（<code>cli_</code> 开头）和 <b>App Secret</b>（点眼睛图标显示，<code>cli_</code> 和 Secret 是两回事，别抄错）。</li>
+    <li>左侧「权限管理」→ 搜索框输入 <code>bitable</code> → 勾选「<b>查看、评论、编辑和管理多维表格</b>」。</li>
+    <li>左侧「<b>添加应用能力</b>」→ 找到「<b>机器人</b>」卡片 → 点 <b>+ 添加</b>。
+      <div class="note warn" style="margin:10px 0 0">
+        <span class="t">这一步不能省</span>
+        飞书官方规定：用应用身份（<code>tenant_access_token</code>）访问<b>别人的</b>表格，<b>前提是应用已开启机器人能力</b>。不开的话，下一步在表格里搜不到它。应用名带「机器人」三个字，也不等于开了机器人能力。
+      </div>
+    </li>
+    <li>左侧「版本管理与发布」→ 「创建版本」→ 版本号填 <code>1.0.0</code> → 保存并申请发布 → 提交。
+      <div class="note warn" style="margin:10px 0 0">
+        <span class="t">可用范围必须包含你自己</span>
+        发版时如果弹「可用范围」，选<b>全体成员</b>或至少把你自己的账号加进去。可用范围里没有表格所有者，同样搜不到应用。
+      </div>
+    </li>
+    <li>你是管理员，审核自己就能过：右上角进「管理后台」→ 应用审核 → 通过。</li>
+  </ol>
+
+  <div class="grab">
+    <b>第 5 个值：</b> <code>FEISHU_APP_ID</code>
+    <span class="where">= 凭证与基础信息页的 App ID，cli_ 开头</span>
+  </div>
+  <div class="grab">
+    <b>第 6 个值：</b> <code>FEISHU_APP_SECRET</code>
+    <span class="where">= 同一页的 App Secret，点显示后复制</span>
+  </div>
+
+  <div class="note stop">
+    <span class="t">应用必须「发布」过一次</span>
+    没发布的应用，下一步在表格里<b>搜不到</b>，接口也返回权限错误。发布后改权限的话，要重新创建版本再发布一次才生效。
+  </div>
+
+  <button class="done-btn" data-step="s3"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 4 ========== -->
+<section id="s4">
+  <div class="step-head"><div class="num">4</div><h2>把应用加进表格 <span class="dur">约 2 分钟</span></h2></div>
+  <p class="lede">整份指南里最容易翻车的一步。不是动作难，是<b>入口不在你以为的地方</b>。搜不到应用，按下面 4.2 逐条查，一定能解决。</p>
+
+  <div class="note stop">
+    <span class="t">先记住这句话，能省你半小时</span>
+    表格右上角那个「<b>分享</b>」弹窗，是给<b>人</b>用的 —— 搜人、搜群、搜部门都行，但<b>搜不到应用</b>，输入应用名只会显示「未能找到相关结果」。<br>
+    应用走的是另一条路：右上角「<b>···</b>」→「<b>···更多</b>」→「<b>添加文档应用</b>」。
+  </div>
+
+  <h3>4.1 找到真正的入口</h3>
+
+  <div class="wire">
+    <div class="wire-bar"><span></span><span></span><span></span><em>多维表格 / 我的账本</em></div>
+    <div class="wire-body">
+      <div class="wrow"><label>分享</label><div class="winput">加「人」用的弹窗 — 请输入姓名或邮箱，搜应用一无所获 ❌</div></div>
+      <div class="wrow"><label>···</label><div class="winput filled">右上角这个按钮，先点它</div></div>
+      <div class="wrow"><label>···更多</label><div class="winput filled">展开二级菜单 ← 真正的入口藏在这里</div></div>
+      <div class="wrow"><label>添加文档应用</label><div class="winput filled">在这里搜「记账机器人」，才搜得到 ✅</div></div>
+    </div>
+  </div>
+
+  <ol>
+    <li>打开你的「我的账本」多维表格（在飞书里，<b>不是</b>开发者后台）。</li>
+    <li>看页面<b>右上角</b>：除了蓝色的「分享」，右侧还有一个「<b>···</b>」或「<b>···更多</b>」按钮。</li>
+    <li>点它 → 下拉菜单里再点「<b>···更多</b>」（这里还有一层）。</li>
+    <li>选「<b>添加文档应用</b>」，会弹出一个专门的窗口，标题写着「添加文档应用」。</li>
+    <li>在<b>这个</b>窗口里输入 <code>记账机器人</code> → 选中 → 权限选「<b>可编辑</b>」→ 点添加。</li>
+  </ol>
+
+  <div class="note good">
+    <span class="t">怎样算真的加成功了</span>
+    加完回到「分享」面板，协作者列表里应该多出一个<b>带「应用」标签</b>的「记账机器人」。看到它才算成功，光点完按钮不算。
+  </div>
+
+  <h3>4.2 用了正确入口还是搜不到？按顺序查这 3 条</h3>
+  <p>这三条是飞书官方写明的硬性前提，缺任何一条，应用都会从搜索框里消失：</p>
+
+  <table>
+    <thead><tr><th>可能性</th><th>怎么确认</th><th>怎么修</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>① 应用没开机器人能力</b><br><div style="font-size:12px;color:var(--faint);margin-top:2px">最常见</div></td>
+        <td>开发者后台左侧「应用能力」下面，有没有「机器人」这一项？只有「添加应用能力」说明还没加。</td>
+        <td>「添加应用能力」→ 机器人卡片 → <b>+ 添加</b> → 然后<b>必须重新创建版本并发布</b>，改动才生效。</td>
+      </tr>
+      <tr>
+        <td><b>② 发布的可用范围不含你</b></td>
+        <td>「版本管理与发布」里，当前版本那行的「可用范围」是什么？</td>
+        <td>改成「全体成员」，或手动把自己加进去。表格所有者不在可用范围里，搜索结果里就没有这个应用。</td>
+      </tr>
+      <tr>
+        <td><b>③ 没开通云文档 API 权限</b></td>
+        <td>「权限管理」里搜 <code>bitable</code>，那几项是不是还是「未开通」状态。</td>
+        <td>勾选「查看、评论、编辑和管理多维表格」→ 重新发版。应用一个云文档权限都没有时，搜索框直接不返回它。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <span class="t">改完任何一项，都要重新发一次版</span>
+    飞书的规则是「应用能力」和「权限」的变更，只有在<b>新版本发布后</b>才生效。只保存不发布，等于没改。你截图里显示「当前修改均已发布」——如果之后又加了机器人能力，这句话就会变成「有未发布的修改」，记得再走一遍「创建版本 → 发布」。
+  </div>
+
+  <h3>4.3 表格开了「高级权限」的话</h3>
+  <p>
+    如果这张表右上角有「高级权限」入口且处于<b>开启</b>状态，加应用时权限必须选「<b>可管理</b>」，选「可编辑」照样写不进去。
+    不确定的话：先按「可编辑」加，第 7 步跑自检报 <code>91403</code>，再回来把它改成「可管理」。
+  </p>
+
+  <h3>4.4 兜底方案：从群组绕过去</h3>
+  <p>万一「添加文档应用」窗口始终搜不出应用，用官方给的第二条路 —— 把应用拉进一个群，再把<b>群</b>加为协作者。群名一定搜得到，这条几乎不会失败：</p>
+  <ol>
+    <li>飞书客户端新建一个群（只放自己一个人也行）。</li>
+    <li>群设置 → 群机器人 → 添加机器人 → 搜「<code>记账机器人</code>」添加。
+      <br><div style="font-size:12.5px;color:var(--faint);margin-top:3px">注意要选你的应用本身，<b>不是</b>「自定义机器人」——那是个 webhook，跟这里无关。</div>
+    </li>
+    <li>回到多维表格 → 右上角「分享」→ 搜这个<b>群名</b> → 加为协作者 → 权限「可编辑」。</li>
+  </ol>
+  <p>应用作为群成员，就自动继承了群的文档权限。</p>
+
+  <div class="note good">
+    <span class="t">到这里，飞书的 4 个值齐了</span>
+    App Token、Table ID、App ID、App Secret。先别急着填，等第 6 步一起填。
+  </div>
+
+  <button class="done-btn" data-step="s4"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 5 ========== -->
+<section id="s5">
+  <div class="step-head"><div class="num">5</div><h2>注册企业微信，建一个应用 <span class="dur">约 10 分钟</span></h2></div>
+  <p class="lede">它负责把你在微信里发的消息转给程序，再把结果回给你。</p>
+
+  <h3>5.1 注册</h3>
+  <ol>
+    <li>打开 <a href="https://work.weixin.qq.com" target="_blank" rel="noopener">work.weixin.qq.com</a> → 右上角「立即注册」。</li>
+    <li>填写：团队名称（写「个人账本」就行）、行业（选其他）、人员规模（1–50 人）、管理员姓名和手机号。</li>
+    <li>用微信扫码验证，完成注册。</li>
+  </ol>
+  <div class="note tip">
+    <span class="t">不需要营业执照、不需要企业认证、不需要对公打款</span>
+    未认证团队一样能用自建应用和消息回调，只是成员上限少。你自己用完全够。
+  </div>
+
+  <h3>5.2 拿企业 ID</h3>
+  <ol>
+    <li>用管理员微信扫码登录管理后台（也可以从注册完成页直接进）。</li>
+    <li>顶部「我的企业」→「企业信息」→ 拉到最下面「企业 ID」。</li>
+  </ol>
+  <div class="grab">
+    <b>第 1 个值：</b> <code>WECOM_CORP_ID</code>
+    <span class="where">= 我的企业 → 企业信息 → 企业 ID，ww 开头的一串</span>
+  </div>
+
+  <h3>5.3 建应用</h3>
+  <ol>
+    <li>顶部「应用管理」→「应用」页 → 找到「自建」区域 → 点「创建应用」。</li>
+    <li>应用名称填 <code>记账</code>，logo 随便传一张（或跳过），可见范围选「你自己」→ 创建。</li>
+    <li>点进这个应用，页面里找到「接收消息」区域 → 点「<b>设置 API 接收</b>」。</li>
+  </ol>
+
+  <p>会弹出这样一个配置框（注意：现在<b>还不能填 URL</b>）：</p>
+
+  <div class="wire">
+    <div class="wire-bar"><span></span><span></span><span></span><em>企业微信 · 设置API接收</em></div>
+    <div class="wire-body">
+      <div class="wrow"><label>URL</label><div class="winput">部署完云函数再回来填（先别点保存）</div></div>
+      <div class="wrow"><label>Token</label><div class="winput filled">点右边「随机获取」，然后抄走</div></div>
+      <div class="wrow"><label>EncodingAESKey</label><div class="winput filled">同样点「随机获取」，抄走这一长串</div></div>
+    </div>
+  </div>
+
+  <div class="grab">
+    <b>第 2 个值：</b> <code>WECOM_TOKEN</code>
+    <span class="where">= 「随机获取」生成的 Token（3–32 位字母数字）</span>
+  </div>
+  <div class="grab">
+    <b>第 3 个值：</b> <code>WECOM_AES_KEY</code>
+    <span class="where">= 「随机获取」生成的 EncodingAESKey，<b>正好 43 位</b>，少一个字符都不行</span>
+  </div>
+
+  <div class="note stop">
+    <span class="t">先别点「保存」</span>
+    URL 还是空的，现在点保存一定失败。这两个值抄下来就够了，等第 8 步部署完云函数，拿到地址再回来填 URL 保存。
+  </div>
+
+  <button class="done-btn" data-step="s5"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 6 ========== -->
+<section id="s6">
+  <div class="step-head"><div class="num">6</div><h2>把 7 个值填进来 <span class="dur">约 2 分钟</span></h2></div>
+  <p class="lede">填完点一下，自动生成配置文件内容，不用手打 key 名。</p>
+
+  <div class="form" id="form">
+    <div class="field"><label>WECOM_CORP_ID</label><input id="f-corp" placeholder="ww 开头，第 5.2 步" autocomplete="off"><div class="hint">企业微信 → 我的企业 → 企业信息 → 企业 ID</div></div>
+    <div class="field"><label>WECOM_TOKEN</label><input id="f-token" placeholder="3–32 位字母数字，第 5.3 步" autocomplete="off"><div class="hint">设置 API 接收 → 随机获取</div></div>
+    <div class="field"><label>WECOM_AES_KEY</label><input id="f-aes" placeholder="正好 43 位，第 5.3 步" autocomplete="off"><div class="hint">设置 API 接收 → 随机获取</div></div>
+    <div class="field"><label>FEISHU_APP_ID</label><input id="f-appid" placeholder="cli_ 开头，第 3 步" autocomplete="off"><div class="hint">开发者后台 → 凭证与基础信息</div></div>
+    <div class="field"><label>FEISHU_APP_SECRET</label><input id="f-secret" placeholder="第 3 步" autocomplete="off"><div class="hint">同一页，点显示后复制</div></div>
+    <div class="field"><label>FEISHU_APP_TOKEN</label><input id="f-apptoken" placeholder="第 2 步" autocomplete="off"><div class="hint">表格地址 /base/ 后面那一串</div></div>
+    <div class="field"><label>FEISHU_TABLE_ID</label><input id="f-table" placeholder="tbl 开头，第 2 步" autocomplete="off"><div class="hint">表格地址 table= 后面那一串</div></div>
+  </div>
+
+  <div class="out" id="out"></div>
+
+  <div class="btn-row">
+    <button class="btn" id="copyBtn">复制配置内容</button>
+    <button class="btn ghost" id="clearBtn">清空</button>
+    <span class="copied" id="copiedMsg"></span>
+  </div>
+
+  <h3>然后：这些内容写到哪去</h3>
+
+  <p>
+    写进项目根目录的 <code>.env</code> 文件。<code>.env</code> 不进版本库，仓库里只有
+    <code>.env.example</code> 作模板：复制一份改名，或直接跑 <code>node tools/setenv.js --paste</code>
+    把上面这段整段粘进去，它会校验格式并自动备份旧文件。
+  </p>
+
+  <div class="note tip">
+    <span class="t">推荐：一条命令搞定，不用开记事本</span>
+    在项目目录里执行：
+    <div class="out" style="margin:10px 0">cd suiyin
+node tools/setenv.js --paste</div>
+    然后把上面这段生成的内容<b>整段粘进终端</b>（Ctrl+V 或右键粘贴），回车两下结束。<br>
+    它会自己校验格式、把旧文件备份成 <code>.env.bak</code>、连注释一起写整齐。格式不对会拦下来，不会写坏。
+  </div>
+
+  <h3>或者手动改（不想用命令的话）</h3>
+  <ol>
+    <li>打开 <b>项目文件夹</b>（就是放着 <code>index.js</code>、<code>src</code> 这些文件的那个目录）</li>
+    <li>找到名为 <code>.env</code> 的文件 → 右键 →「打开方式」→ 记事本。
+      <div style="font-size:12.5px;color:var(--faint);margin-top:3px">看不到这个文件？在资源管理器顶部「查看」里勾上「文件扩展名」。它是普通文件，不是隐藏文件。</div>
+    </li>
+    <li><b>Ctrl+A 全选，删掉</b>（假值必须清干净，不能和真实值混在一起）。</li>
+    <li>把上面生成的内容粘进去 → Ctrl+S 保存。</li>
+  </ol>
+
+  <div class="note stop">
+    <span class="t">别搞混：.env 和「云函数环境变量」是两回事</span>
+    <code>.env</code> 只在你<b>这台电脑</b>上生效，第 7 步的本地自检读的就是它。<br>
+    云函数上没有这个文件 —— 部署时（第 8 步）要在这 7 个值在腾讯云控制台的「函数配置 → 环境变量」里<b>再填一遍</b>。<br>
+    所以这两个地方的值必须一模一样，填错一个就会出现「本地能记、微信里不行」。
+  </div>
+
+  <div class="note warn">
+    <span class="t">这个页面里的内容只存在你自己的浏览器里</span>
+    不会上传到任何地方。但生成的文件包含密钥，<b>不要截图发群、不要提交到 GitHub</b>（项目里已经有 <code>.gitignore</code> 挡住了）。
+  </div>
+
+  <button class="done-btn" data-step="s6"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 7 ========== -->
+<section id="s7">
+  <div class="step-head"><div class="num">7</div><h2>本地自检，别跳过 <span class="dur">约 3 分钟</span></h2></div>
+  <p class="lede">一条命令把 7 个凭证全测一遍，顺带查应用能力、权限、表结构。红了就修，别带着问题去部署。</p>
+
+  <p>在项目目录里执行：</p>
+  <div class="out">cd suiyin
+node tools/check.js --write</div>
+
+  <p>它会依次检查这些，逐项给结论：</p>
+  <table>
+    <thead><tr><th style="width:150px">检查项</th><th>会告诉你什么</th></tr></thead>
+    <tbody>
+      <tr><td>1. 配置格式</td><td>CorpID 是不是 ww 开头、AESKey 是不是 43 位、有没有多空格</td></tr>
+      <tr><td>2. 飞书应用认证</td><td>App ID / Secret 对不对，能不能换到 token</td></tr>
+      <tr><td><b>3. 机器人能力</b></td><td>应用开没开机器人能力 —— 这就是「表格里搜不到应用」的头号原因，提前告诉你</td></tr>
+      <tr><td>4. 表格访问权限</td><td>第 4 步「添加文档应用」有没有加成功。报 <code>91403</code> 就是没加上</td></tr>
+      <tr><td>5. 列名与类型</td><td>会把表里<b>实际</b>的列名列出来，列名不一致直接指出来</td></tr>
+      <tr><td>6. 单选选项</td><td>「类型」里有没有「支出」「收入」</td></tr>
+      <tr><td>7. 真实写入</td><td>写一条 0.01 元的测试记录再删掉（带 <code>--write</code> 才做）</td></tr>
+      <tr><td>8. 日期查询</td><td>日期筛选能不能用，抽样打印一条真实记录</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note good">
+    <span class="t">看到这个就对了</span>
+    <code>🎉 全部通过，可以去部署云函数了</code>
+  </div>
+
+  <div class="note stop">
+    <span class="t">报错怎么办</span>
+    每条错误下面都有一行 <code>→</code> 开头的修复建议，照着做。改完再跑一次。最常见的两个：<br>
+    · <b>报 <code>91403</code> / 应用没有这张表的权限</b> → 回第 4 步，用「···」→「···更多」→「添加文档应用」重新加一次<br>
+    · <b>列「日期」类型不对</b> → 回第 1 步把日期列改成日期类型
+  </div>
+
+  <div class="note tip">
+    <span class="t">顺便验证一下记账逻辑</span>
+    自检通过后，可以先用本地假数据跑一遍，看回复长什么样：<br>
+    <code>node src/local-server.js</code> 然后另开一个终端 <code>node tools/sim.js "25 午饭"</code>
+  </div>
+
+  <button class="done-btn" data-step="s7"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 8 ========== -->
+<section id="s8">
+  <div class="step-head"><div class="num">8</div><h2>部署到云函数 <span class="dur">约 15 分钟</span></h2></div>
+  <p class="lede">让程序跑在公网上，企业微信才找得到它。不需要买服务器。</p>
+
+  <h3>8.1 打包</h3>
+  <div class="out">node tools/pack.js</div>
+  <p>生成 <code>dist/suiyin.zip</code>（约 29 KB，已自动排除 .env 和测试文件）。</p>
+
+  <h3>8.2 注册腾讯云</h3>
+  <p>打开 <a href="https://cloud.tencent.com" target="_blank" rel="noopener">cloud.tencent.com</a>，注册并完成实名认证（个人认证，用身份证 + 人脸，几分钟）。</p>
+
+  <h3>8.3 新建函数</h3>
+  <p>搜索进入「云函数 SCF」控制台 → 「函数服务」→ 「新建」→ 选「从头开始」，按下表填：</p>
+  <table>
+    <thead><tr><th style="width:130px">项目</th><th>填什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>函数类型</b></td><td><b>事件函数</b> —— 页面上第一个选择项，别选成「Web 函数」</td></tr>
+      <tr><td>函数名称</td><td><code>suiyin</code></td></tr>
+      <tr><td>地域</td><td>选离你近的，比如「广州」</td></tr>
+      <tr><td>运行环境</td><td><b>Node.js 18</b> 或更高（Nodejs16 及以下不行，没有 fetch）</td></tr>
+      <tr><td>提交方法</td><td><b>本地上传 ZIP 包</b> → 选 <code>dist/suiyin.zip</code></td></tr>
+      <tr><td>执行方法</td><td><code>index.main</code>（注意是点号，不是斜杠）</td></tr>
+      <tr><td>内存</td><td><b>256 MB</b>（免费额度内，别用 128 MB：冷启动时容易吃紧）</td></tr>
+      <tr><td>超时时间</td><td><b>10 秒</b> —— 默认是 3 秒，必须改，否则「飞书记上了、微信没回信」</td></tr>
+      <tr><td><b>日志配置</b></td><td><b>默认投递</b> —— 不选的话，出问题连日志都看不了（见下）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <span class="t">日志配置必须选「默认投递」，否则以后排查问题会卡住</span>
+    新建函数页面底部有一个「<b>日志配置</b>」区域，两个选项：<b>默认投递</b> / 自定义投递。<br><br>
+    选「默认投递」，SCF 会自动帮你开通日志服务 CLS，把调用日志投到 <code>SCF_logtopic_xxx</code> 这个专用主题里，保留 7 天。
+    <b>不配置的话，点「日志查询」只会看到「您的函数尚未进行日志配置，无法查看函数调用日志」</b>，
+    这时候任何报错都查不出来，只能靠猜。<br><br>
+    <b>已经建好、当时漏配了？</b>函数详情 →「函数配置」→ 编辑 → 找到「日志配置」→ 选「默认投递」→ 保存。
+    改完<b>只对之后的调用生效</b>，之前的不会补录 —— 所以配完要再去微信发一条消息，才会有新日志。<br>
+    <span style="font-size:12.5px;color:var(--faint)">日志服务是独立计费产品，但 SCF 专用主题在免费额度内，个人记账这点量用不完。</span>
+  </div>
+
+  <div class="note stop">
+    <span class="t">超时时间默认 3 秒，这一项漏了会出现最迷惑的故障</span>
+    企业微信要求 5 秒内回包。一笔账的处理是「写飞书 → 查本月合计 → 组织回包」，3 秒很容易不够。<br>
+    函数被强制中断的瞬间，<b>飞书那边已经写完了</b>，可回包永远发不出去 ——
+    你会看到「账确实记上了，微信里却一条回信都没有」，然后企业微信开始重试，飞书里多出几条重复记录。<br><br>
+    建完之后再去「函数配置」核对一次：<b>超时时间 10 秒、内存 256 MB</b>。
+  </div>
+
+  <div class="note warn">
+    <span class="t">函数类型：一定选「事件函数」，不能选「Web 函数」</span>
+    这是新建页面的<b>第一个选择项</b>，两个选项长得都挺合理，选错了后面全都白做。<br><br>
+    <b>Web 函数</b>要求代码包里有一个可执行的 <code>scf_bootstrap</code> 文件，由它启动一个监听 <b>9000 端口</b>的 HTTP 服务。我们的 zip 里没有这个文件——代码是 <code>exports.main(event, context)</code> 的事件函数写法，选 Web 函数会在启动阶段就报错，函数压根跑不起来。<br><br>
+    <b>事件函数</b>才是我们这套的路子：函数 URL 把 HTTP 请求转成 JSON 事件交给 <code>index.main</code>，函数返回 <code>{statusCode, headers, body}</code>，函数 URL 再把它<b>原样</b>映射成真实响应。企业微信要收到一段精确的 XML，这条链路才对得上。<br><br>
+    如果已经建成 Web 函数了，<b>删掉重建</b>（30 秒的事），别去试着改代码适配——两条路的写法不一样。
+  </div>
+
+  <h3>8.4 配环境变量</h3>
+  <p>函数创建好后，进「函数配置」→「编辑」→ 环境变量。一共要加 <b>8 个</b>，key 名照着下面抄（别手打），value 从 <code>.env</code> 里复制：</p>
+  <div class="out">WECOM_CORP_ID
+WECOM_TOKEN
+WECOM_AES_KEY
+FEISHU_APP_ID
+FEISHU_APP_SECRET
+FEISHU_APP_TOKEN
+FEISHU_TABLE_ID
+APP_STORE=feishu</div>
+  <div class="note stop">
+    <span class="t">APP_STORE 必须是 feishu，不是这 7 个里的任何一个</span>
+    它是第 8 个，也最容易忘。留空或写成 <code>json</code>，数据会写进云函数的临时目录 —— 函数一冷启动就<b>全部消失</b>，而你在微信里看到的回执一切正常，根本不会发现。
+  </div>
+  <div class="note tip">
+    <span class="t">为什么不直接把 .env 打包进去</span>
+    环境变量在控制台改，改完立即生效，不用重新上传代码；而且 zip 包万一外传也不会带出密钥。
+  </div>
+
+  <h3>8.5 开启函数 URL（关键一步）</h3>
+  <p><b>不要去「触发管理 → 创建触发器」。</b>API 网关产品已于 2025 年 6 月 30 日下线，那个弹窗里已经没有「API 网关触发器」了，剩下的定时触发、COS 触发都不是 HTTP 入口，选了也没用。</p>
+  <p>正确入口在函数详情页左侧导航栏的 <b>「函数 URL」</b>。它是函数的专属 HTTP(S) 端点，不经过网关、不用备案、地址永久不变——比原来的网关方案还少一个坑。</p>
+
+  <div class="wire">
+    <div class="wire-bar"><span></span><span></span><span></span><em>腾讯云 · 新建函数 URL</em></div>
+    <div class="wire-body">
+      <div class="wrow"><label>别名/版本</label><div class="winput filled">$LATEST（默认）</div></div>
+      <div class="wrow"><label>公网访问</label><div class="wcheck"><span class="wbox"></span> <b>启用</b> —— 不勾外网访问不到</div></div>
+      <div class="wrow"><label>内网访问</label><div class="winput">不启用</div></div>
+      <div class="wrow"><label>CORS</label><div class="winput">不勾（不用浏览器调接口）</div></div>
+      <div class="wrow"><label>授权类型</label><div class="winput filled">开放 —— 千万别选「CAM 鉴权」</div></div>
+    </div>
+  </div>
+
+  <div class="note stop">
+    <span class="t">授权类型必须选「开放」</span>
+    选「CAM 鉴权」的话，每个请求都要带腾讯云签名。企业微信服务器不会签，请求会被直接挡在门外——SCF 日志里连一条调用记录都不会有，现象和「URL 填错」完全一样，非常难查。
+  </div>
+
+  <p>点确定后，页面给出一条地址，形如：</p>
+  <div class="out">https://abc12345-xyz98765.ap-guangzhou.tencentscf.com</div>
+  <p>这条地址<b>永久不变</b>（绑在版本上，不是临时域名），复制下来，第 9 步要用。</p>
+
+  <div class="note good">
+    <span class="t">好消息：不需要勾「集成响应」了</span>
+    API 网关时代必须勾那一项，否则函数返回的 <code>{statusCode, headers, body}</code> 会被当 JSON 原样吐出去。<br>
+    函数 URL 是<b>原生解析</b>这个结构的——只要返回值里有 <code>statusCode</code>，它就映射成真实的 HTTP 状态码、响应头和 body。我们的 <code>index.js</code> 本来就是这个格式，所以<b>什么都不用额外配</b>。
+  </div>
+
+  <h3>8.6 先测一下通不通</h3>
+  <p>在浏览器里<u>新开一个标签页</u>打开那条地址（GET 请求，不带任何参数）。应该看到一行纯文本：</p>
+  <div class="out">missing echostr</div>
+  <p>看到这行字，就说明<b>函数、入口、权限全通了</b>。看不到的话按下表对号：</p>
+  <table>
+    <thead><tr><th style="width:170px">你看到的</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>页面打不开 / 一直转圈</td><td>8.5 的「公网访问」没启用</td></tr>
+      <tr><td>403，或提到 CAM / 签名</td><td>授权类型选成了「CAM 鉴权」，改成「开放」</td></tr>
+      <tr><td><code>missing echostr</code> 以外的纯文本</td><td>比如一条错误堆栈，说明函数跑起来了但报错，去看 SCF 日志</td></tr>
+    </tbody>
+  </table>
+
+  <button class="done-btn" data-step="s8"><span class="dot"></span>这一步做完了</button>
+</section>
+
+<!-- ========== 9 ========== -->
+<section id="s9">
+  <div class="step-head"><div class="num">9</div><h2>回填回调 URL，验收 <span class="dur">约 3 分钟</span></h2></div>
+  <p class="lede">企业微信会立刻发一个验证请求过来，通过就说明整条链路通了。</p>
+
+  <ol>
+    <li>回到企业微信管理后台 → 应用管理 → 你的「记账」应用 → 「接收消息」→「设置 API 接收」。</li>
+    <li>URL 填第 8 步拿到的那个地址（整条，带结尾的斜杠也没关系）。</li>
+    <li>Token 和 EncodingAESKey 保持你之前抄的那两个值不动作。</li>
+    <li>点「保存」。</li>
+  </ol>
+
+  <div class="note good">
+    <span class="t">保存成功 = 企业微信 → 云函数 → 回包 整条链路都通了</span>
+    想确认的话，去腾讯云 SCF 控制台「日志查询」，能看到 <code>[wecom] URL 验证通过</code>。
+  </div>
+
+  <div class="note stop">
+    <span class="t">保存失败，按这个顺序查</span>
+    ① 浏览器直接打开那条地址，<b>看不到</b> <code>missing echostr</code> → 回 8.5，公网访问没启用或授权类型选错<br>
+    ② 提示「<b>域名主体校验未通过</b>」→ 见下方单独说明<br>
+    ③ 日志里<b>有</b>请求但返回 401 → Token 抄错了<br>
+    ④ 日志里<b>没有</b>任何请求 → URL 填错，或函数没部署成功<br>
+    ⑤ 报 <code>解密失败：receiveid 不匹配</code> → CorpID 填错了
+  </div>
+
+  <div class="note warn">
+    <span class="t">提示「域名主体校验未通过，需配置备案主体与当前企业主体相同或有关联关系的域名」</span>
+    这是企业微信对<b>已认证企业</b>的限制：认证过的企业只能用「备案主体和企业主体一致」的域名，<code>tencentscf.com</code> 这种公共域名过不了。<br><br>
+    <b>两个出路：</b><br>
+    · <b>未认证企业不受这条限制</b>——可以配置非服务商的公共域名。你如果是新建的免费团队（未认证），通常不会遇到这个提示；真遇到了，先确认企业状态是不是「已认证」。<br>
+    · 已经有认证企业、非用不可：去腾讯云函数「高级能力 → 自定义域名」绑定你自己<b>已备案</b>的域名，再把这个域名填进企业微信。
+  </div>
+
+  <h3>真正用起来</h3>
+  <p>手机微信里找到入口：企业微信 App 或微信里的「企业微信」小程序 → 工作台 → 点「记账」应用。</p>
+  <p>发一句试试：</p>
+  <div class="out">25 午饭</div>
+  <p>应该立刻收到：</p>
+  <div class="out">✅ 支出 ¥25.00 · 午饭（餐饮）
+今日 ¥25.00 ｜ 本月 ¥25.00</div>
+
+  <div class="note tip">
+    <span class="t">手机上更顺手的用法</span>
+    在企业微信里把这个应用「添加到微信」或置顶，之后从微信聊天列表就能直接打开，少点两下。
+  </div>
+
+  <h3>发了消息没回信？先跑这一步</h3>
+  <p>别在微信里反复试。用这个工具——它会<b>假装成企业微信服务器</b>，对你的函数连发三次请求，每次只验证一件事，坏在哪一段一眼就能看出来：</p>
+  <div class="out">.\ping.cmd https://abc12345-xyz98765.ap-guangzhou.tencentscf.com</div>
+  <p>三步全绿就长这样：</p>
+  <div class="out">【1】裸 GET ... ✅ 函数通了，URL 正确，公网访问已开启
+【2】模拟企业微信的 URL 验证 ... ✅ 签名校验、解密、回包全部正确
+【3】模拟企业微信推送一条消息「帮助」...
+    企业微信实际会收到：
+      💰 记账用法
+      25 午饭        记一笔支出
+      ...
+    ✅ 收消息 → 处理 → 加密回包，整条链路通了</div>
+
+  <table>
+    <thead><tr><th style="width:140px">卡在哪步</th><th>说明什么</th></tr></thead>
+    <tbody>
+      <tr><td>第 1 步就红</td><td>地址不通。回 8.5 查：公网访问没启用、授权类型选成了 CAM 鉴权，或地址抄错</td></tr>
+      <tr><td>第 2 步红</td><td>Token / AESKey / CorpID 有一个和云端不一致 —— 绝大多数是<b>云函数环境变量少填或抄错</b>（8.4）</td></tr>
+      <tr><td>三步全绿</td><td><b>云函数侧没问题，问题在企业微信那边</b> —— 看下面</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note stop">
+    <span class="t">三步全绿但微信里还是没反应，先做一个判断</span>
+    <b>打开飞书多维表格，看刚才那条消息有没有变成一行记录。</b>答案不同，原因完全不同：
+  </div>
+
+  <table>
+    <thead><tr><th style="width:150px">飞书表格里</th><th>说明和修法</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>没有</b>新记录</td>
+        <td>
+          <b>消息根本没推过来。</b>企业微信后台 → 应用 →「接收消息」→「设置 API 接收」→ 页面下方「<b>选择需要接收的消息事件类型</b>」里，
+          要勾上「消息事件」或「文本消息」。<br>
+          只填 URL 不勾类型，URL 验证照样通过，但消息永远不会推 —— 这是最容易误判的一种。
+        </td>
+      </tr>
+      <tr>
+        <td><b>有</b>新记录</td>
+        <td>
+          <b>消息到了、账也记上了，只是回信没送回去。</b>看同一条内容是不是重复了 <b>2～4 行</b>：<br>
+          · 重复 → 企业微信在重试，说明<b>函数没在 5 秒内回包</b>，第一嫌疑是云函数超时时间太小（见下）<br>
+          · 只有 1 行 → 回包发出去了但被丢弃，多半是 Content-Type 或响应结构被网关改写
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <span class="t">「飞书有记录、微信没回信」的元凶：云函数超时时间还是默认 3 秒</span>
+    腾讯云新建函数时，<b>超时时间默认 3 秒</b>。一笔账的处理顺序是：写飞书 → 再查一次本月合计 → 组织回包。
+    如果卡在 3 秒被强制中断，<b>飞书那边已经写完了，回包却永远发不出去</b> ——
+    症状就是「账记上了，但微信里一点动静都没有」，而且企业微信会重试，飞书里于是多出几条重复记录。<br><br>
+    <b>修法：</b>函数详情 →「函数配置」→ 编辑 → <b>超时时间改成 10 秒</b>，内存建议提到 <b>256 MB</b>（128 MB 在冷启动时容易吃紧），保存即可，不用重新上传代码。
+  </div>
+
+  <div class="note tip">
+    <span class="t">顺手压一下耗时（可选）</span>
+    在云函数环境变量里加 <code>APP_SHOW_TODAY_TOTAL=0</code>，记账回执就不再查「今日/本月」，能少一次飞书往返，
+    回包时间大约减半。代价是回信里只有这一笔，看不到合计。想先求稳可以先关，稳了再打开。
+  </div>
+
+  <p>顺手再核对这几项：</p>
+  <table>
+    <thead><tr><th style="width:180px">检查项</th><th>在哪看</th></tr></thead>
+    <tbody>
+      <tr><td>应用可见范围含你吗</td><td>应用详情页 → 「可见范围」，确认自己或所在部门在里面</td></tr>
+      <tr><td>发消息的入口对吗</td><td>要进「<b>工作台 → 记账</b>」打开对话框发；在企业微信顶部搜索框里发，它收不到</td></tr>
+      <tr><td>云函数日志有记录吗</td><td>SCF → 「日志查询」。<b>一条都没有</b> = 企业微信压根没推过来（就是上面那个事件类型问题）；<b>有记录但报错</b> = 按报错内容修</td></tr>
+      <tr><td>是不是超时了</td><td>日志里耗时接近 5 秒 → 环境变量加一条 <code>APP_SHOW_TODAY_TOTAL=0</code>（少查一次飞书）</td></tr>
+    </tbody>
+  </table>
+
+  <button class="done-btn" data-step="s9"><span class="dot"></span>全部完成</button>
+</section>
+
+<!-- ========== 排错 ========== -->
+<section>
+  <div class="step-head"><div class="num" style="background:var(--red-50);color:var(--red)">查</div><h2 style="font-size:17px">出问题先看这张表</h2></div>
+
+  <table>
+    <thead><tr><th style="width:190px">现象</th><th>原因与修法</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>「创建触发器」里找不到 API 网关触发器</td>
+        <td><b>正常现象，不是你的问题。</b>API 网关产品 2025-06-30 已下线，不再支持新建。改用 <b>函数 URL</b>：函数详情 → 左侧「函数 URL」→ 新建（见 8.5）。</td>
+      </tr>
+      <tr>
+        <td>「您的函数尚未进行日志配置，无法查看函数调用日志」</td>
+        <td>建函数时「日志配置」没选。<b>函数配置 → 编辑 → 日志配置 → 默认投递 → 保存</b>（SCF 会自动开通 CLS，免费额度够用）。<br>
+          注意：只对之后的调用生效，配完要再去微信发一条消息，日志里才会有内容。<br>
+          <b>不想开日志也行</b> —— 跑 <code>.\ping.cmd</code>，它显示的「函数内部耗时」和回包内容，比日志更直接。</td>
+      </tr>
+      <tr>
+        <td>保存回调 URL 失败</td>
+        <td>先在浏览器打开那条地址，看能不能看到 <code>missing echostr</code>：<br>
+          <b>看不到</b> → 8.5 的公网访问没启用，或授权类型选成了「CAM 鉴权」<br>
+          <b>看得到</b> → 看 SCF 日志：有请求但 401 是 Token 错；没请求是 URL 填错<br>
+          <b>提示域名主体校验未通过</b> → 已认证企业不能用公共域名，见第 9 步说明</td>
+      </tr>
+      <tr>
+        <td>微信发消息没回信</td>
+        <td>先跑 <code>.\ping.cmd &lt;函数URL&gt;</code> 定位断在哪一段。三步全绿的话，九成是「设置 API 接收」页面下方的<b>消息事件类型没勾</b>——只填 URL 不勾类型，消息不会推送，但 URL 验证照样能过，很容易误判成「配置成功了却不回信」。<br>
+          其次查：应用可见范围、发消息入口（要进「工作台 → 应用」）、SCF 日志里有没有调用记录。</td>
+      </tr>
+      <tr>
+        <td>回「⚠️ 记账失败」</td>
+        <td>数据没写进飞书，是好事——至少没假装成功。看后面的具体错误：<br>
+          <code>FieldNameNotFound</code> → 列名对不上<br>
+          <code>Permission denied</code> / <code>91403</code> → 应用没被加进表格，回第 4 步走「···更多 → 添加文档应用」</td>
+      </tr>
+      <tr>
+        <td>回「⏳ 处理超时了」</td>
+        <td>飞书太慢或被墙。检查 <code>APP_FEISHU_TIMEOUT_MS</code>，或把今日合计关掉。</td>
+      </tr>
+      <tr>
+        <td>飞书报 <code>code 21001</code><br><span style="color:var(--red);font-size:12px">Access denied due to platform policy</span></td>
+        <td><b>这不是配置错误，改配置永远修不好。</b>飞书硬性要求开发者是「企业用户」，个人版账号能在后台建应用、能发版，但一调接口就被策略层拦下。<br><br>
+          <b>怎么确认：</b>把 App Secret 故意改错一位再请求，如果报 <code>10014 app secret invalid</code>，就证明密钥是对的、请求也确实到了飞书 —— 被拒的是身份。<br><br>
+          <b>怎么修：</b>飞书客户端 → 创建一个免费团队（1 分钟）→ 在新团队下重建自建应用和多维表格 → 换 4 个飞书凭证。企业微信那 3 个不用动。</td>
+      </tr>
+      <tr>
+        <td>飞书报 <code>code 1254004</code></td>
+        <td>app_token 或 table_id 抄错了，回第 2 步重抄。</td>
+      </tr>
+      <tr>
+        <td>飞书报 <code>code 91403</code></td>
+        <td>三个可能，按顺序查：<br>① 第 4 步「添加文档应用」没做或做错入口；<br>② 应用没开机器人能力（第 3 步第 5 项）；<br>③ 表格开了高级权限，需要把应用权限改成「可管理」。<br>详见第 4 步 4.2。</td>
+      </tr>
+      <tr>
+        <td>自己发的消息不回复</td>
+        <td>检查应用的「可见范围」里有没有你自己。</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========== 日常用法 ========== -->
+<section>
+  <div class="step-head"><div class="num" style="background:var(--teal-50);color:var(--teal)">用</div><h2 style="font-size:17px">日常怎么发</h2></div>
+
+  <table>
+    <thead><tr><th style="width:150px">发这句</th><th>效果</th></tr></thead>
+    <tbody>
+      <tr><td><code>25 午饭</code></td><td>支出 25，自动归类「餐饮」</td></tr>
+      <tr><td><code>午饭 25</code></td><td>一样，金额写前面写后面都行</td></tr>
+      <tr><td><code>+3000 工资</code></td><td>记收入</td></tr>
+      <tr><td><code>12.5 打车</code></td><td>支持小数</td></tr>
+      <tr><td><code>25 奶茶 #娱乐</code></td><td>手动指定分类</td></tr>
+      <tr><td><code>本月</code></td><td>本月汇总 + 各分类占比</td></tr>
+      <tr><td><code>今天</code> / <code>昨天</code></td><td>当天明细</td></tr>
+      <tr><td><code>明细</code></td><td>最近 10 条</td></tr>
+      <tr><td><code>删1</code></td><td>删掉最近一条（记错了用这个）</td></tr>
+      <tr><td><code>帮助</code></td><td>看全部用法</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note tip">
+    <span class="t">收支是自动判断的</span>
+    带 <code>+</code> 号一定是收入；备注里有「工资 / 红包 / 退款 / 报销」也会判成收入；
+    但「发红包」「买东西」这类词优先判成支出。判断错了就 <code>删1</code> 重发，或者加 <code>+</code> 明确一下。
+  </div>
+</section>
+
+<footer>
+  碎银 Suiyin · 操作指南 &nbsp;|&nbsp; 配套文档：<code>README.md</code>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var KEYS = [
+    { id: 'f-corp',     env: 'WECOM_CORP_ID',      check: function (v) { return /^ww[0-9A-Za-z]{8,}$/.test(v); } },
+    { id: 'f-token',    env: 'WECOM_TOKEN',        check: function (v) { return v.length >= 3 && v.length <= 32; } },
+    { id: 'f-aes',      env: 'WECOM_AES_KEY',      check: function (v) { return v.length === 43; } },
+    { id: 'f-appid',    env: 'FEISHU_APP_ID',      check: function (v) { return /^cli_/.test(v); } },
+    { id: 'f-secret',   env: 'FEISHU_APP_SECRET',  check: function (v) { return v.length >= 20; } },
+    { id: 'f-apptoken', env: 'FEISHU_APP_TOKEN',   check: function (v) { return v.length >= 10; } },
+    { id: 'f-table',    env: 'FEISHU_TABLE_ID',    check: function (v) { return /^tbl/.test(v); } }
+  ];
+
+  var STORE_KEY = 'wl-deploy-values';
+  var DONE_KEY = 'wl-deploy-steps';
+
+  function $(id) { return document.getElementById(id); }
+  function loadJSON(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }
+  function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  var values = loadJSON(STORE_KEY, {});
+  var done = loadJSON(DONE_KEY, {});
+
+  // ---- 表单 ----
+  KEYS.forEach(function (k) {
+    var el = $(k.id);
+    if (values[k.env]) el.value = values[k.env];
+    el.addEventListener('input', function () {
+      var v = el.value.trim();
+      values[k.env] = v;
+      saveJSON(STORE_KEY, values);
+      markField(el, k, v);
+      render();
+    });
+    markField(el, k, el.value.trim());
+  });
+
+  function markField(el, k, v) {
+    el.classList.remove('ok', 'bad');
+    if (!v) return;
+    el.classList.add(k.check(v) ? 'ok' : 'bad');
+  }
+
+  // ---- 生成 .env ----
+  function render() {
+    var lines = [
+      '# 企业微信',
+      ['WECOM_CORP_ID', 'WECOM_TOKEN', 'WECOM_AES_KEY'].map(function (e) {
+        return kv(e, values[e]);
+      }).join('\n'),
+      '',
+      '# 飞书多维表格',
+      ['FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_APP_TOKEN', 'FEISHU_TABLE_ID'].map(function (e) {
+        return kv(e, values[e]);
+      }).join('\n'),
+      '',
+      '# 行为配置',
+      kv('APP_STORE', 'feishu'),
+      kv('APP_TZ_OFFSET', '8'),
+      kv('APP_SHOW_TODAY_TOTAL', '1')
+    ];
+    var html = lines.map(function (l) {
+      if (!l) return '';
+      if (l.charAt(0) === '#') return '<span class="c">' + esc(l) + '</span>';
+      return l.replace(/^([A-Z_]+=)(.*)$/, function (m, k, v) {
+        return '<span class="k">' + esc(k) + '</span>' + esc(v);
+      });
+    }).join('\n');
+    $('out').innerHTML = html;
+  }
+
+  function kv(k, v) { return k + '=' + (v || ''); }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function rawText() {
+    return [
+      '# 企业微信',
+      kv('WECOM_CORP_ID', values.WECOM_CORP_ID),
+      kv('WECOM_TOKEN', values.WECOM_TOKEN),
+      kv('WECOM_AES_KEY', values.WECOM_AES_KEY),
+      '',
+      '# 飞书多维表格',
+      kv('FEISHU_APP_ID', values.FEISHU_APP_ID),
+      kv('FEISHU_APP_SECRET', values.FEISHU_APP_SECRET),
+      kv('FEISHU_APP_TOKEN', values.FEISHU_APP_TOKEN),
+      kv('FEISHU_TABLE_ID', values.FEISHU_TABLE_ID),
+      '',
+      '# 行为配置',
+      kv('APP_STORE', 'feishu'),
+      kv('APP_TZ_OFFSET', '8'),
+      kv('APP_SHOW_TODAY_TOTAL', '1')
+    ].join('\n');
+  }
+
+  $('copyBtn').addEventListener('click', function () {
+    var text = rawText();
+    var msg = $('copiedMsg');
+    function ok() {
+      msg.textContent = '已复制，去粘贴到 .env 文件里';
+      setTimeout(function () { msg.textContent = ''; }, 3000);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, fallback);
+    } else {
+      fallback();
+    }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); ok(); } catch (e) { msg.textContent = '复制失败，请手动选中'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  $('clearBtn').addEventListener('click', function () {
+    if (!confirm('清空已填的 7 个值？（只清空这个页面，不影响 .env 文件）')) return;
+    values = {};
+    saveJSON(STORE_KEY, values);
+    KEYS.forEach(function (k) {
+      $(k.id).value = '';
+      $(k.id).classList.remove('ok', 'bad');
+    });
+    render();
+  });
+
+  // ---- 步骤勾选 ----
+  var btns = document.querySelectorAll('.done-btn');
+  Array.prototype.forEach.call(btns, function (btn) {
+    var id = btn.getAttribute('data-step');
+    if (done[id]) btn.classList.add('on');
+    btn.addEventListener('click', function () {
+      done[id] = !done[id];
+      btn.classList.toggle('on', done[id]);
+      saveJSON(DONE_KEY, done);
+      updateBar();
+    });
+  });
+
+  function updateBar() {
+    var total = btns.length;
+    var n = 0;
+    Array.prototype.forEach.call(btns, function (b) {
+      if (done[b.getAttribute('data-step')]) n++;
+    });
+    $('bar').style.width = (n / total * 100) + '%';
+    $('doneCount').textContent = n;
+  }
+
+  render();
+  updateBar();
+})();
+</script>
+</body>
+</html>
