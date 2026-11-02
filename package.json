@@ -1,6 +1,6 @@
 {
   "name": "suiyin",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Bookkeeping over WeChat / WeCom messages, stored in a Feishu Bitable. Zero dependencies.",
   "main": "index.js",
   "engines": {

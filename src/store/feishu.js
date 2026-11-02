@@ -104,6 +104,10 @@ function createFeishuStore(cfg) {
     if (v && typeof v === 'object') return Number(v.value) || 0;
     return 0;
   }
+  /**
+   * 日期字段吐出来的是「毫秒」时间戳，跟本项目内部一致，原样用。
+   * 只在碰到 ISO 字符串时兜一下。
+   */
   function toDate(v) {
     if (typeof v === 'number') return v;
     if (typeof v === 'string') {
@@ -129,6 +133,12 @@ function createFeishuStore(cfg) {
   return {
     name: 'feishu',
 
+    /**
+     * 新增一条。
+     * 注：接口文档里有 client_token 幂等参数，但实测无论放在 query 还是 body
+     * （单条 / batch_create 都试过）都不生效，同 token 连发仍是两条记录。
+     * 所以这里不做写入幂等，重复由上层「记账后自检 + 去重命令」处理。
+     */
     async add(rec, opts = {}) {
       const token = await getToken(opts);
       const data = await request(
@@ -147,6 +157,7 @@ function createFeishuStore(cfg) {
     async list({ from, to, limit = 500, latest = false, timeout } = {}) {
       const token = await getToken({ timeout });
       const conditions = [];
+      // 飞书的日期字段认「毫秒」时间戳，本项目内部也一律用毫秒，直接传
       if (from != null) {
         conditions.push({
           field_name: fields.date,
@@ -178,6 +189,16 @@ function createFeishuStore(cfg) {
           { method: 'POST', body, token, timeout }
         );
         const items = data.items || [];
+        // 记录能列出来、字段值却是空的 —— 不是表里没数据，是飞书不给你看。
+        // 官方 FAQ：多维表格开了「高级权限」时，调用身份必须有「可管理」，
+        // 只有「可编辑」时会「调用成功但返回数据为空」。这种情况必须喊出来，
+        // 否则界面上一片 ¥0.00，看着像账本坏了。
+        if (items.length && items.every((it) => !it.fields || !Object.keys(it.fields).length)) {
+          const err = new Error('EMPTY_FIELDS');
+          err.code = 'EMPTY_FIELDS';
+          err.count = items.length;
+          throw err;
+        }
         for (const it of items) out.push(fromFields(it.fields || {}, it.record_id));
         pageToken = data.page_token || '';
         if (!data.has_more || !pageToken || out.length >= limit) break;

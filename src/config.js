@@ -74,6 +74,9 @@ const config = {
     // 绝不为了多一行统计让整条消息超时。
     // 跨云链路单次查询 1.3 秒左右，给 1500 才够；加完仍在 4.5 秒预算内。
     statsBudgetMs: Number(env.APP_STATS_BUDGET_MS || 1500),
+    // 记账后顺手查一下有没有「90 秒内一模一样的记录」（同一条消息被平台重投的迹象）。
+    // 复用算合计的那次查询，不额外发请求；算不出合计时也照样查，才有机会发现重复。
+    dedupeCheck: env.APP_DEDUPE_CHECK !== '0',
     // 数据落地适配器：feishu | memory | json
     store: env.APP_STORE || 'feishu',
     // 云函数所在地域（诊断里显示，跨云链路快慢跟它强相关）

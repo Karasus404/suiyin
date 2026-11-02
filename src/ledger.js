@@ -85,12 +85,50 @@ function withinBudget(promise, ms) {
 }
 
 /**
+ * 在记录里找「和刚写的这条一模一样」的孪生记录。
+ * 判据：类型、金额、备注都相同，时间相差 90 秒以内，且不是自己。
+ * 同一句话在 90 秒内连记两笔几乎不会是有意的，多半是同一条消息被平台重投。
+ */
+const TWIN_WINDOW_MS = 90 * 1000;
+
+/**
+ * 「读到了记录，字段却全是空的」——这不是账本没数据，是飞书不给看。
+ * 官方 FAQ：多维表格开了「高级权限」时，调用身份得是「可管理」，
+ * 只有「可编辑」会出现「调用成功但返回数据为空」。
+ */
+function EMPTY_FIELDS_HINT(count) {
+  return [
+    '⚠️ 读到了 ' + (count || '') + ' 条记录，但字段值全是空的',
+    '不是账本坏了，是飞书那边没给读的权限：',
+    '多维表格右上角 ··· → ···更多 → 添加文档应用',
+    '找到这个应用，权限选「可管理」→ 添加',
+    '（「可编辑」不够，字段值会被涂掉）',
+  ].join('\n');
+}
+
+function findTwin(rows, rec, added) {
+  const norm = (s) => String(s == null ? '' : s).trim();
+  for (const r of rows) {
+    if (added && added.id && r.id === added.id) continue;
+    if (r.type !== rec.type) continue;
+    if (Math.abs(Number(r.amount) - Number(rec.amount)) > 0.001) continue;
+    if (norm(r.note) !== norm(rec.note)) continue;
+    if (Math.abs(Number(r.date) - Number(rec.date)) > TWIN_WINDOW_MS) continue;
+    return r;
+  }
+  return null;
+}
+
+/**
  * 记账成功后顺手算「今日/本月合计」。
  * 这是锦上添花的一行，拿不到就整行省略 —— 绝不因为它让回执超时。
+ * 同一次查询顺带看一眼有没有重复记录，不额外花时间。
  */
 async function loadStatsQuietly(ctx, rec, added, now, tz) {
   const { store, cfg } = ctx;
-  if (!cfg.app.showTodayTotal) return null;
+  const empty = { stats: null, twin: null };
+  // 不看合计也不查重，就没必要多发这次请求
+  if (!cfg.app.showTodayTotal && !cfg.app.dedupeCheck) return empty;
 
   const budget = Math.min(
     cfg.app.statsBudgetMs || 1500,
@@ -98,7 +136,7 @@ async function loadStatsQuietly(ctx, rec, added, now, tz) {
   );
   if (budget < 350) {
     note(ctx, '跳过今日合计（剩余预算 ' + Math.max(0, remainingMs(ctx)) + 'ms 不够）');
-    return null;
+    return empty;
   }
 
   const startedAt = Date.now();
@@ -114,21 +152,26 @@ async function loadStatsQuietly(ctx, rec, added, now, tz) {
     const hasIt = added && added.id
       ? rows.some((r) => r.id === added.id)
       : rows.some((r) => r.date === rec.date && r.amount === rec.amount);
-    return summarize(hasIt ? rows : rows.concat(rec), tz, now);
+    return {
+      stats: cfg.app.showTodayTotal
+        ? summarize(hasIt ? rows : rows.concat(rec), tz, now)
+        : null,
+      twin: cfg.app.dedupeCheck ? findTwin(rows, rec, added) : null,
+    };
   })();
   work.catch(() => {}); // 超时后可能才失败，别让它变成未处理 rejection
 
   const out = await withinBudget(work.catch(() => null), budget);
   if (out === TIMEOUT) {
     note(ctx, '今日合计超预算（>' + budget + 'ms），本次不显示');
-    return null;
+    return empty;
   }
-  note(ctx, '今日合计 ' + (Date.now() - startedAt) + 'ms');
-  return out;
+  note(ctx, '今日合计 ' + (Date.now() - startedAt) + 'ms' + (out && out.twin ? '｜发现重复记录' : ''));
+  return out || empty;
 }
 
 /** 记账成功的回执 */
-function recordReply(rec, stats, tz) {
+function recordReply(rec, stats, tz, twin) {
   const typeLabel = rec.type === 'income' ? '收入' : '支出';
   const sign = rec.type === 'income' ? '+' : '';
   const lines = [];
@@ -148,6 +191,11 @@ function recordReply(rec, stats, tz) {
     } else {
       lines.push('今日 ¥' + money(stats.todayExpense) + ' ｜ 本月 ¥' + money(stats.expense));
     }
+  }
+  if (twin) {
+    lines.push('');
+    lines.push('⚠️ 90 秒内还有一条一模一样的记录，可能是同一条消息被重投了');
+    lines.push('发「去重」清掉多出来的那条');
   }
   return lines.join('\n');
 }
@@ -215,6 +263,92 @@ function recentReply(rows, tz, limit = 10) {
       t.formatShort(r.date, tz) + '  ' + (r.type === 'income' ? '+' : '-') + money(r.amount) +
       (r.note ? '  ' + r.note : '')
     );
+  }
+  return lines.join('\n');
+}
+
+/**
+ * 「去重」：把最近记录里 3 分钟内完全相同的几条并成一条。
+ *
+ * 飞书的写入接口没有幂等（client_token 实测无效），跨实例的重投挡不住，
+ * 所以留一个手动兜底：真的多记了一条，发一句「去重」就干净了。
+ * 只在同一类型 + 同一金额 + 同一备注、且时间紧挨着的时候才算重复，
+ * 相隔超过 3 分钟的相同开销（比如连着两天都买同一份早餐）不会被误删。
+ */
+const DEDUPE_SCAN_LIMIT = 200;
+const DEDUPE_WINDOW_MS = 180 * 1000;
+const DEDUPE_MAX_DELETE = 6;
+
+async function runDedupe({ store, cfg, ctx, tz }) {
+  const tRead = Date.now();
+  let rows;
+  try {
+    rows = await store.list({
+      limit: DEDUPE_SCAN_LIMIT,
+      latest: true,
+      timeout: callTimeout(ctx, cfg),
+    });
+  } catch (e) {
+    if (e && e.code === 'EMPTY_FIELDS') return EMPTY_FIELDS_HINT(e.count);
+    return '⚠️ 读不到记录：' + String(e.message || e).slice(0, 100);
+  }
+  note(ctx, '去重：读 ' + rows.length + ' 条 ' + (Date.now() - tRead) + 'ms');
+
+  // 从旧到新扫，每组保留最早那条
+  const sorted = rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => a.r.date - b.r.date || a.i - b.i)
+    .map((x) => x.r);
+
+  const lastKept = new Map();
+  const groups = new Map();
+  const toRemove = [];
+
+  for (const r of sorted) {
+    const key = r.type + '|' + Number(r.amount).toFixed(2) + '|' + String(r.note || '').trim();
+    const prev = lastKept.get(key);
+    if (prev && r.id && Math.abs(r.date - prev.date) <= DEDUPE_WINDOW_MS) {
+      toRemove.push(r);
+      const g = groups.get(key) || { rec: prev, extra: 0 };
+      g.extra += 1;
+      groups.set(key, g);
+    } else {
+      lastKept.set(key, r);
+    }
+  }
+
+  if (!toRemove.length) {
+    return '🧹 最近 ' + rows.length + ' 条里没有重复记录 ✓';
+  }
+
+  let removed = 0;
+  for (const r of toRemove) {
+    if (removed >= DEDUPE_MAX_DELETE) break;
+    const left = remainingMs(ctx);
+    if (left < 1800) break; // 快到回包时限了，剩下的留给下一次
+    try {
+      const ok = await store.remove(r.id, {
+        timeout: Math.min(cfg.app.feishuTimeoutMs || 3800, left - 1200),
+      });
+      if (ok !== false) removed += 1;
+    } catch (e) {
+      note(ctx, '去重：删 ' + r.id + ' 失败 ' + (e.message || e));
+      break;
+    }
+  }
+  note(ctx, '去重：删掉 ' + removed + '/' + toRemove.length + ' 条 ' + (Date.now() - tRead) + 'ms');
+
+  const lines = ['🧹 清理重复'];
+  lines.push('判定：类型+金额+备注 相同，且相隔不超过 3 分钟');
+  lines.push('删掉 ' + removed + ' 条，涉及 ' + groups.size + ' 组：');
+  for (const [, g] of groups) {
+    const label = (g.rec.type === 'income' ? '+' : '-') + '¥' + money(g.rec.amount) +
+      (g.rec.note ? ' ' + g.rec.note : '');
+    lines.push('· ' + label + ' — ' + (g.extra + 1) + ' 条并 1 条');
+  }
+  if (removed < toRemove.length) {
+    lines.push('');
+    lines.push('还剩 ' + (toRemove.length - removed) + ' 条没删完（一次删太多会超时），再发一次「去重」');
   }
   return lines.join('\n');
 }
@@ -289,6 +423,11 @@ async function handleText(text, ctx) {
         added = await store.add(rec, { timeout: callTimeout(ctx, cfg) });
       } catch (e) {
         note(ctx, 'store.add 失败 ' + (Date.now() - tAdd) + 'ms：' + (e.message || e));
+        // 超时这类错误，飞书那边很可能已经写进去了，不能一口咬定「没记上」
+        if (/超时|timeout/i.test(String(e.message || ''))) {
+          return '⚠️ 这次超时了，这笔可能已经记上了\n' +
+            '先发「明细」看一眼，别急着重发（重发会变成两条）';
+        }
         return '⚠️ 记账失败（数据没写进去）\n' + String(e.message || e).slice(0, 120) +
           '\n请稍后重发一次';
       }
@@ -304,8 +443,12 @@ async function handleText(text, ctx) {
       }
 
       // 写到这儿这笔账已经成了，剩下的统计可有可无
-      const stats = await loadStatsQuietly(ctx, rec, added, now, tz);
-      return recordReply(rec, stats, tz);
+      const { stats, twin } = await loadStatsQuietly(ctx, rec, added, now, tz);
+      return recordReply(rec, stats, tz, twin);
+    }
+
+    case 'dedupe': {
+      return await runDedupe({ store, cfg, ctx, now, tz });
     }
 
     case 'diag': {
@@ -363,6 +506,9 @@ async function handleText(text, ctx) {
         replyText = await runQuery(parsed, {
           store, now, tz, monthStart, nextMonth, timeout: callTimeout(ctx, cfg),
         });
+      } catch (e) {
+        if (e && e.code === 'EMPTY_FIELDS') return EMPTY_FIELDS_HINT(e.count);
+        throw e;
       } finally {
         note(ctx, '查询 ' + parsed.scope + ' ' + (Date.now() - tRead) + 'ms');
       }
@@ -391,11 +537,17 @@ async function handleText(text, ctx) {
       }
 
       // 最新优先，rows[0] 就是刚记的那条
-      const rows = await store.list({
-        limit: Math.max(1, parsed.offset),
-        latest: true,
-        timeout: callTimeout(ctx, cfg),
-      });
+      let rows;
+      try {
+        rows = await store.list({
+          limit: Math.max(1, parsed.offset),
+          latest: true,
+          timeout: callTimeout(ctx, cfg),
+        });
+      } catch (e) {
+        if (e && e.code === 'EMPTY_FIELDS') return EMPTY_FIELDS_HINT(e.count);
+        throw e;
+      }
       if (!rows.length) return '还没有记录可以删～';
       const target = rows[parsed.offset - 1];
       if (!target) {

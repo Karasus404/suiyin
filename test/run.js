@@ -72,6 +72,8 @@ const TEST_CFG = {
     tzOffset: 8,
     showTodayTotal: true,
     feishuTimeoutMs: 3000,
+    statsBudgetMs: 1500,
+    dedupeCheck: true,
     store: 'memory',
     jsonFile: '',
   },
@@ -222,8 +224,8 @@ async function main() {
   // ---------- 4. 存储失败要如实报错 ----------
   group('4. 异常处理');
   {
-    const brokenStore = {
-      name: 'broken',
+    const timedOut = {
+      name: 'timeout-store',
       async add() {
         throw new Error('飞书接口超时（3500ms）');
       },
@@ -234,9 +236,27 @@ async function main() {
         return false;
       },
     };
-    const r = await handleText('25 午饭', { store: brokenStore, cfg: TEST_CFG, now: NOW });
-    has(r, '⚠️ 记账失败', '写库失败时不谎报成功');
+    // 超时不能说死「没记上」—— 飞书那边可能已经写进去了，用户重发就变两条
+    const r = await handleText('25 午饭', { store: timedOut, cfg: TEST_CFG, now: NOW });
+    has(r, '可能已经记上', '写入超时不谎称失败');
+    has(r, '别急着重发', '超时时劝用户别重发');
     has(r, '超时', '错误信息透传给用户');
+
+    const reallyFailed = {
+      name: 'broken-store',
+      async add() {
+        throw new Error('飞书接口报错 code=1254005 msg=FieldNameNotFound');
+      },
+      async list() {
+        return [];
+      },
+      async remove() {
+        return false;
+      },
+    };
+    const r2 = await handleText('25 午饭', { store: reallyFailed, cfg: TEST_CFG, now: NOW });
+    has(r2, '⚠️ 记账失败', '真失败时不谎报成功');
+    has(r2, 'code=1254005', '错误码透传给用户');
   }
 
   // ---------- 5. 企业微信回调全链路 ----------
@@ -472,6 +492,17 @@ async function main() {
         caught = e.message;
       }
       has(caught, 'FieldNameNotFound', '飞书报错信息完整抛出（便于定位字段名配错）');
+
+      // --- 记录能列出来但字段全空：飞书高级权限没给「可管理」 ---
+      queue.push({ code: 0, data: { items: [{ record_id: 'rec_z', fields: {} }], has_more: false } });
+      let emptyErr = null;
+      try {
+        await store.list({ limit: 5, latest: true });
+      } catch (e) {
+        emptyErr = e;
+      }
+      eq(emptyErr && emptyErr.code, 'EMPTY_FIELDS', '字段全空时抛 EMPTY_FIELDS 而不是返回一堆 ¥0');
+      eq(emptyErr && emptyErr.count, 1, '带上读到的条数，方便说明情况');
     } finally {
       global.fetch = realFetch;
     }
@@ -870,6 +901,72 @@ async function main() {
     const d3 = await postFixed(777002);
     eq(storeDup._rows.length, 2, '换了 MsgId 才算新消息');
     has(d3, '支出 ¥25.00', '新消息正常记账');
+  }
+
+  // ---------- 12. 跨实例重复与「去重」 ----------
+  group('12. 跨实例重复与去重');
+  {
+    // 飞书的写入接口没有幂等（client_token 实测无效），
+    // 所以「同一条消息被投到两个实例」这种情况会在库里留下两条。
+    // 这里模拟它，然后确认两件事：回执要提示，用户发「去重」能清干净。
+    const store = createMemoryStore();
+    const ctx = (t) => ({ store, cfg: TEST_CFG, now: t, logger: silent });
+
+    await handleText('25 午饭', ctx(NOW));
+    const r2 = await handleText('25 午饭', ctx(NOW + 3 * 1000));
+    has(r2, '90 秒内还有一条一模一样的记录', '第二次写入时提示可能重复');
+    has(r2, '发「去重」', '提示里给出清理办法');
+
+    const before = await store.list({ limit: 10, latest: true });
+    eq(before.length, 2, '确实写进了两条（写入层没有幂等）');
+
+    const clean = await handleText('去重', ctx(NOW + 5 * 1000));
+    has(clean, '删掉 1 条', '去重删掉多出来的那条');
+    has(clean, '¥25.00 午饭', '去重报告点名是哪一条');
+
+    const after = await store.list({ limit: 10, latest: true });
+    eq(after.length, 1, '去重后只剩一条');
+    eq(after[0].date, NOW, '保留的是最早那条');
+
+    const again = await handleText('去重', ctx(NOW + 6 * 1000));
+    has(again, '没有重复记录', '没有重复时如实告知');
+
+    // 相隔超过 3 分钟的相同开销不是重复（比如连着两天同一份早餐）
+    await handleText('12 早餐', ctx(NOW + 400 * 1000));
+    await handleText('12 早餐', ctx(NOW + 800 * 1000));
+    const keep = await handleText('去重', ctx(NOW + 900 * 1000));
+    has(keep, '没有重复记录', '隔了 400 秒的相同开销不当重复删');
+    const still = await store.list({ limit: 10, latest: true });
+    eq(still.filter((r) => r.note === '早餐').length, 2, '两笔早餐都还在');
+
+    // 「去重」也能识别类型：同金额的支出和收入不互相吞
+    await handleText('-9 退款', ctx(NOW + 1000 * 1000));
+    await handleText('+9 退款', ctx(NOW + 1002 * 1000));
+    const diffType = await handleText('去重', ctx(NOW + 1004 * 1000));
+    has(diffType, '没有重复记录', '一收一支的相同金额不算重复');
+
+    // 飞书高级权限没给「可管理」时，字段全空 —— 得说清是权限，不是账本坏了
+    const blind = {
+      name: 'blind',
+      async add() {
+        return { id: 'x' };
+      },
+      async list() {
+        const e = new Error('EMPTY_FIELDS');
+        e.code = 'EMPTY_FIELDS';
+        e.count = 7;
+        throw e;
+      },
+      async remove() {
+        return true;
+      },
+    };
+    const hint = await handleText('明细', { store: blind, cfg: TEST_CFG, now: NOW });
+    has(hint, '字段值全是空的', '字段读不到时明说');
+    has(hint, '可管理', '提示里讲清要哪种权限');
+    has(hint, '添加文档应用', '提示里给出具体入口');
+    const hint2 = await handleText('去重', { store: blind, cfg: TEST_CFG, now: NOW });
+    has(hint2, '字段值全是空的', '去重遇到同样问题时也给同样的提示');
   }
 
   // ---------- 汇总 ----------

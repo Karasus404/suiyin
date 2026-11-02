@@ -838,7 +838,7 @@ APP_STORE=feishu</div>
 </section>
 
 <!-- ========== 排错 ========== -->
-<section>
+<section id="trouble">
   <div class="step-head"><div class="num" style="background:var(--red-50);color:var(--red)">查</div><h2 style="font-size:17px">出问题先看这张表</h2></div>
 
   <table>
@@ -873,8 +873,15 @@ APP_STORE=feishu</div>
           <code>Permission denied</code> / <code>91403</code> → 应用没被加进表格，回第 4 步走「···更多 → 添加文档应用」</td>
       </tr>
       <tr>
-        <td>回「⏳ 处理超时了」</td>
-        <td>飞书太慢或被墙。检查 <code>APP_FEISHU_TIMEOUT_MS</code>，或把今日合计关掉。</td>
+        <td>回「⚠️ 这次超时了，这笔可能已经记上了」</td>
+        <td>飞书没在时限内回话，但账很可能已经写进去了。<b>先发「明细」看一眼，别急着重发</b>——重发会变成两条。<br>
+          慢的原因看「诊断」：<code>APP_FEISHU_TIMEOUT_MS</code> 调大，或把今日合计关掉（<code>APP_SHOW_TODAY_TOTAL=0</code>）。</td>
+      </tr>
+      <tr>
+        <td>明细 / 本月全是 <code>¥0.00</code><br>或回「读到了 N 条记录，但字段值全是空的」</td>
+        <td><b>这不是账本坏了，是飞书不给你看字段。</b>多维表格开了「高级权限」，应用只有「可编辑」不够，必须「可管理」：<br><br>
+          多维表格右上角 <code>···</code> → <code>···更多</code> → <b>添加文档应用</b> → 找到这个应用 → 权限选「<b>可管理</b>」→ 添加。<br><br>
+          改完立刻生效，不用重新发版。重新发一次「明细」就能看到真实金额。</td>
       </tr>
       <tr>
         <td>飞书报 <code>code 21001</code><br><span style="color:var(--red);font-size:12px">Access denied due to platform policy</span></td>
@@ -914,6 +921,7 @@ APP_STORE=feishu</div>
       <tr><td><code>今天</code> / <code>昨天</code></td><td>当天明细</td></tr>
       <tr><td><code>明细</code></td><td>最近 10 条</td></tr>
       <tr><td><code>删1</code></td><td>删掉最近一条（记错了用这个）</td></tr>
+      <tr><td><code>去重</code></td><td>同一笔账出现两条时，把多出来的清掉</td></tr>
       <tr><td><code>帮助</code></td><td>看全部用法</td></tr>
     </tbody>
   </table>

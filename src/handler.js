@@ -15,6 +15,7 @@
 const crypto = require('node:crypto');
 const wxcrypt = require('./wxcrypt');
 const { handleText } = require('./ledger');
+const dedupe = require('./dedupe');
 
 // 企业微信/微信都要求 5 秒内响应，留 0.5 秒给网络
 const REPLY_BUDGET_MS = 4500;
@@ -81,6 +82,8 @@ function createHandler({ config, store, logger = console }) {
   const DEDUPE_TTL = 5 * 60 * 1000;
   const DEDUPE_MAX = 300;
   const replyCache = new Map();
+  // 同一条消息正在处理中（并发的两次重投）：等着一起用，别再执行一遍
+  const inflight = new Map();
 
   /**
    * 平台在 5 秒内没收到回包会重投同一条消息（企业微信最多 3 次）。
@@ -254,11 +257,27 @@ function createHandler({ config, store, logger = console }) {
     sawFirstMessage = true;
 
     // 同一条消息被重投（上次回包慢了）→ 直接重发上次的回执，绝不重复记账
+    const mkey = dedupe.messageKey(ch.name, msgId);
     const dup = cacheGet(ch, msgId);
     if (dup) {
       logger.log('[' + ch.name + '] 重复投递 msgId=' + msgId + '，直接复用上次回执');
       return buildReply({
         ch, encrypted, toUser: fromUser, fromUser: toUser, replyText: dup, now, startedAt, logger,
+      });
+    }
+
+    // 同一条消息的另一次投递还在处理中（并发的两次重投）：等它的结果，别再执行一遍
+    const running = mkey ? inflight.get(mkey) : null;
+    if (running) {
+      logger.log('[' + ch.name + '] msgId=' + msgId + ' 上一次投递仍在处理，等它的结果');
+      let text = '';
+      try {
+        text = await running;
+      } catch (_) {
+        text = '⏳ 上一条还在处理，稍等几秒再发一次';
+      }
+      return buildReply({
+        ch, encrypted, toUser: fromUser, fromUser: toUser, replyText: text, now, startedAt, logger,
       });
     }
 
@@ -284,22 +303,36 @@ function createHandler({ config, store, logger = console }) {
           resolve('⏳ 这次有点慢，命令可能已经执行了\n发「明细」确认一下，别急着重发');
         }, REPLY_BUDGET_MS);
       });
+
+      const work = (async () => {
+        try {
+          const ledgerWork = handleText(content, {
+            store,
+            cfg: config,
+            deadline: startedAt + REPLY_BUDGET_MS - 300, // 留 300ms 组装并发出回包
+            logger,
+            channel: ch.label,
+            coldStart,
+          });
+          // 就算这边先超时回了话，等它真跑完也把结果补进缓存，
+          // 下次重投就能拿到「确实记上了」的回执，而不是继续等
+          ledgerWork
+            .then((real) => cachePut(ch, msgId, real))
+            .catch(() => {});
+          return await Promise.race([ledgerWork, timeout]);
+        } catch (e) {
+          logger.error('[ledger] 处理失败：', e.stack || e.message);
+          return '⚠️ 出错了：' + String(e.message || e).slice(0, 100) + '\n稍后再试一次';
+        } finally {
+          clearTimeout(timer);
+        }
+      })();
+
+      if (mkey) inflight.set(mkey, work);
       try {
-        const work = handleText(content, {
-          store,
-          cfg: config,
-          deadline: startedAt + REPLY_BUDGET_MS - 300, // 留 300ms 组装并发出回包
-          logger,
-          channel: ch.label,
-          coldStart,
-        });
-        work.catch(() => {}); // 防止超时后未处理的 rejection
-        replyText = await Promise.race([work, timeout]);
-      } catch (e) {
-        logger.error('[ledger] 处理失败：', e.stack || e.message);
-        replyText = '⚠️ 出错了：' + String(e.message || e).slice(0, 100) + '\n稍后再试一次';
+        replyText = await work;
       } finally {
-        clearTimeout(timer);
+        if (mkey) inflight.delete(mkey);
       }
       cachePut(ch, msgId, replyText);
     }

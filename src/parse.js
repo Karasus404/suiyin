@@ -68,6 +68,7 @@ const HELP_TEXT = [
   '明细           看最近 10 条',
   '删1 / 撤销     删掉最近一条',
   '诊断           看通道和耗时',
+  '去重           清理重复记录',
 ].join('\n');
 
 /** 全角转半角 + 统一空白 */
@@ -142,6 +143,9 @@ function parse(input) {
   }
   if (/^(诊断|状态|自检|测速|ping|debug)$/i.test(compact)) {
     return { kind: 'diag' };
+  }
+  if (/^(去重|清理重复|重复清理|清重|dedupe)$/i.test(compact)) {
+    return { kind: 'dedupe' };
   }
   if (/^(本月|这个月|当月|月统计|月报|月汇总|统计)$/.test(compact)) {
     return { kind: 'query', scope: 'month' };
